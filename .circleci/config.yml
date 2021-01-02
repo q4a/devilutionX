@@ -10,6 +10,7 @@ jobs:
       - run: apt-get update -y
       - run: apt-get install -y g++ libsdl2-dev libsdl2-mixer-dev libsdl2-ttf-dev git rpm
       - run: apt-get install -y -t 'stretch-backports*' cmake libsodium-dev
+      - run: git submodule update --init --recursive
       - run: cmake -S. -Bbuild .. -DNIGHTLY_BUILD=ON
       - run: cmake --build build -j $(nproc)
       - run: cmake --build build --target package
@@ -22,6 +23,7 @@ jobs:
       - checkout
       - run: apt-get update -y
       - run: apt-get install -y g++ libsdl2-dev libsdl2-mixer-dev libsdl2-ttf-dev git cmake libsodium-dev libgtest-dev lcov curl
+      - run: git submodule update --init --recursive
       - run: cmake -S. -Bbuild -DRUN_TESTS=ON
       - run: cmake --build build -j $(nproc)
       - run: cmake --build build -j $(nproc) --target test
@@ -36,6 +38,7 @@ jobs:
       - run: apt-get update -y
       - run: apt-get install -y g++ libsdl-dev libsdl-mixer1.2-dev libsdl-ttf2.0-dev git rpm
       - run: apt-get install -y -t 'stretch-backports*' cmake libsodium-dev
+      - run: git submodule update --init --recursive
       - run: cmake -S. -Bbuild .. -DNIGHTLY_BUILD=ON -DUSE_SDL1=ON
       - run: cmake --build build -j $(nproc)
       - run: cmake --build build --target package
@@ -51,6 +54,7 @@ jobs:
       - run: apt-get update -y
       - run: apt-get install -y g++-multilib libsdl2-dev:i386 libsdl2-mixer-dev:i386 libsdl2-ttf-dev:i386 libsodium-dev git rpm
       - run: apt-get install -y -t 'stretch-backports*' cmake libsodium-dev:i386
+      - run: git submodule update --init --recursive
       - run: cmake -S. -Bbuild -DNIGHTLY_BUILD=ON -DCMAKE_TOOLCHAIN_FILE=../CMake/32bit.cmake
       - run: cmake --build build -j $(nproc)
       - run: cmake --build build --target package
@@ -73,7 +77,8 @@ jobs:
       - run: tar -xzf libsodium-1.0.18-mingw.tar.gz --no-same-owner
       - run: cp -r libsodium-win32/* /usr/i686-w64-mingw32
       - run: cp -r SDL2*/i686-w64-mingw32 /usr
-      - run: cmake -S. -Bbuild -DNIGHTLY_BUILD=ON -DCMAKE_TOOLCHAIN_FILE=../CMake/mingwcc.cmake
+      - run: git submodule update --init --recursive
+      - run: cmake -S. -Bbuild -DNIGHTLY_BUILD=ON -DCMAKE_TOOLCHAIN_FILE=../CMake/mingwcc.cmake -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON
       - run: cmake --build build -j $(nproc)
       - store_artifacts: {path: ./build/devilutionx.exe, destination: devilutionx_x86.exe}
   switch:
