@@ -1,7 +1,6 @@
 #include "DiabloUI/art_draw.h"
 
 #include "DiabloUI/diabloui.h"
-#include "render.h"
 #include "utils/display.h"
 #include "utils/sdl_compat.h"
 
@@ -37,7 +36,7 @@ void DrawArt(Sint16 screenX, Sint16 screenY, Art *art, int nFrame, Uint16 srcW, 
 		ErrSdl();
 }
 
-void DrawArt(const CelOutputBuffer &out, Sint16 screenX, Sint16 screenY, Art *art, int nFrame, Uint16 srcW, Uint16 srcH)
+void DrawArt(const Surface &out, Sint16 screenX, Sint16 screenY, Art *art, int nFrame, Uint16 srcW, Uint16 srcH)
 {
 	if (screenY >= gnScreenHeight || screenX >= gnScreenWidth || art->surface == nullptr)
 		return;
@@ -53,8 +52,8 @@ void DrawArt(const CelOutputBuffer &out, Sint16 screenX, Sint16 screenY, Art *ar
 	if (srcH != 0 && srcH < srcRect.h)
 		srcRect.h = srcH;
 	SDL_Rect dstRect;
-	dstRect.x = BUFFER_BORDER_LEFT + screenX;
-	dstRect.y = BUFFER_BORDER_TOP + screenY;
+	dstRect.x = screenX;
+	dstRect.y = screenY;
 	dstRect.w = srcRect.w;
 	dstRect.h = srcRect.h;
 

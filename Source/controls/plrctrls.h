@@ -1,7 +1,7 @@
 #pragma once
 // Controller actions implementation
 
-#include <stdint.h>
+#include <cstdint>
 
 namespace devilution {
 
@@ -46,10 +46,6 @@ void FocusOnInventory();
 void PerformSpellAction();
 void StoreSpellCoords();
 
-typedef struct coords {
-	int x;
-	int y;
-} coords;
 extern int speedspellcount;
 
 } // namespace devilution

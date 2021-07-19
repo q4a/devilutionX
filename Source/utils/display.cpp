@@ -4,6 +4,10 @@
 #include <psp2/power.h>
 #endif
 
+#ifdef __3DS__
+#include "platform/ctr/display.hpp"
+#endif
+
 #include "DiabloUI/diabloui.h"
 #include "control.h"
 #include "controls/controller.h"
@@ -12,6 +16,7 @@
 #include "controls/devices/kbcontroller.h"
 #include "controls/game_controls.h"
 #include "options.h"
+#include "utils/log.hpp"
 
 #ifdef USE_SDL1
 #ifndef SDL1_VIDEO_MODE_BPP
@@ -29,17 +34,18 @@ extern SDL_Surface *renderer_texture_surface; /** defined in dx.cpp */
 Uint16 gnScreenWidth;
 Uint16 gnScreenHeight;
 Uint16 gnViewportHeight;
-Uint16 borderRight;
 
 #ifdef USE_SDL1
 void SetVideoMode(int width, int height, int bpp, uint32_t flags)
 {
-	SDL_Log("Setting video mode %dx%d bpp=%u flags=0x%08X", width, height, bpp, flags);
-	SDL_SetVideoMode(width, height, bpp, flags);
+	Log("Setting video mode {}x{} bpp={} flags=0x{:08X}", width, height, bpp, flags);
+	ghMainWnd = SDL_SetVideoMode(width, height, bpp, flags);
+	if (ghMainWnd == nullptr) {
+		ErrSdl();
+	}
 	const SDL_VideoInfo &current = *SDL_GetVideoInfo();
-	SDL_Log("Video mode is now %dx%d bpp=%u flags=0x%08X",
+	Log("Video mode is now {}x{} bpp={} flags=0x{:08X}",
 	    current.current_w, current.current_h, current.vfmt->BitsPerPixel, SDL_GetVideoSurface()->flags);
-	ghMainWnd = SDL_GetVideoSurface();
 }
 
 void SetVideoModeToPrimary(bool fullscreen, int width, int height)
@@ -47,9 +53,13 @@ void SetVideoModeToPrimary(bool fullscreen, int width, int height)
 	int flags = SDL1_VIDEO_MODE_FLAGS | SDL_HWPALETTE;
 	if (fullscreen)
 		flags |= SDL_FULLSCREEN;
+#ifdef __3DS__
+	flags &= ~SDL_FULLSCREEN;
+	flags |= Get3DSScalingFlag(sgOptions.Graphics.bFitToScreen, width, height);
+#endif
 	SetVideoMode(width, height, SDL1_VIDEO_MODE_BPP, flags);
 	if (OutputRequiresScaling())
-		SDL_Log("Using software scaling");
+		Log("Using software scaling");
 }
 #endif
 
@@ -67,12 +77,6 @@ void AdjustToScreenGeometry(int width, int height)
 	gnScreenWidth = width;
 	gnScreenHeight = height;
 
-	borderRight = 64;
-	if ((gnScreenWidth % 4) != 0) {
-		// The buffer needs to be divisible by 4 for the engine to blit correctly
-		borderRight += 4 - gnScreenWidth % 4;
-	}
-
 	gnViewportHeight = gnScreenHeight;
 	if (gnScreenWidth <= PANEL_WIDTH) {
 		// Part of the screen is fully obscured by the UI
@@ -84,7 +88,7 @@ void CalculatePreferdWindowSize(int &width, int &height)
 {
 #ifdef USE_SDL1
 	const SDL_VideoInfo &best = *SDL_GetVideoInfo();
-	SDL_Log("Best video mode reported as: %dx%d bpp=%d hw_available=%u",
+	Log("Best video mode reported as: {}x{} bpp={} hw_available={}",
 	    best.current_w, best.current_h, best.vfmt->BitsPerPixel, best.hw_available);
 #else
 	SDL_DisplayMode mode;
@@ -123,7 +127,7 @@ bool SpawnWindow(const char *lpWindowName)
 	scePowerSetArmClockFrequency(444);
 #endif
 
-#if SDL_VERSION_ATLEAST(2, 0, 6)
+#if SDL_VERSION_ATLEAST(2, 0, 6) && defined(__vita__)
 	SDL_SetHint(SDL_HINT_TOUCH_MOUSE_EVENTS, "0");
 #endif
 
@@ -133,9 +137,14 @@ bool SpawnWindow(const char *lpWindowName)
 	SDL_setenv("SDL_AUDIODRIVER", "winmm", /*overwrite=*/false);
 #endif
 
-	int initFlags = SDL_INIT_AUDIO | SDL_INIT_VIDEO | SDL_INIT_JOYSTICK;
+	int initFlags = SDL_INIT_VIDEO | SDL_INIT_JOYSTICK;
+#ifndef NOSOUND
+	initFlags |= SDL_INIT_AUDIO;
+#endif
 #ifndef USE_SDL1
 	initFlags |= SDL_INIT_GAMECONTROLLER;
+
+	SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
 #endif
 	if (SDL_Init(initFlags) <= -1) {
 		ErrSdl();

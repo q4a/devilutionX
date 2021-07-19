@@ -7,6 +7,8 @@
 
 #include "control.h"
 #include "engine.h"
+#include "engine/cel_sprite.hpp"
+#include "utils/stdcompat/optional.hpp"
 
 namespace devilution {
 
@@ -46,19 +48,18 @@ struct STextStruct {
 	int _sx;
 	int _syoff;
 	char _sstr[128];
-	bool _sjust;
-	text_color _sclr;
+	uint16_t flags;
 	int _sline;
 	bool _ssel;
 	int _sval;
 };
 
 /** Shop frame graphics */
-extern BYTE *pSTextBoxCels;
+extern std::optional<CelSprite> pSTextBoxCels;
 /** Small text selection cursor */
-extern BYTE *pSPentSpn2Cels;
+extern std::optional<CelSprite> pSPentSpn2Cels;
 /** Scrollbar graphics */
-extern BYTE *pSTextSlidCels;
+extern std::optional<CelSprite> pSTextSlidCels;
 
 /** Currently active store */
 extern talk_id stextflag;
@@ -93,26 +94,23 @@ extern int boylevel;
 /** Current item sold by Wirt */
 extern ItemStruct boyitem;
 
-void AddStoreHoldRepair(ItemStruct *itm, int i);
+void AddStoreHoldRepair(ItemStruct *itm, int8_t i);
 void InitStores();
-int PentSpn2Spin();
 void SetupTownStores();
 void FreeStoreMem();
-void PrintSString(const CelOutputBuffer &out, int x, int y, bool cjustflag, const char *str, text_color col, int val);
-void DrawSLine(CelOutputBuffer out, int y);
+void PrintSString(const Surface &out, int margin, int line, const char *text, uint16_t flags, int price = 0);
+void DrawSLine(const Surface &out, int y);
 void DrawSTextHelp();
 void ClearSText(int s, int e);
 void StartStore(talk_id s);
-void DrawSText(const CelOutputBuffer &out);
-void STextESC();
-void STextUp();
-void STextDown();
-void STextPrior();
-void STextNext();
-void SetGoldCurs(int pnum, int i);
-void SetSpdbarGoldCurs(int pnum, int i);
+void DrawSText(const Surface &out);
+void StoreESC();
+void StoreUp();
+void StoreDown();
+void StorePrior();
+void StoreNext();
 void TakePlrsMoney(int cost);
-void STextEnter();
+void StoreEnter();
 void CheckStoreBtn();
 void ReleaseStoreBtn();
 

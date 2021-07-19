@@ -1,6 +1,6 @@
 #pragma once
 
-#include <stdint.h>
+#include <cstdint>
 #include <string>
 #include <memory>
 #include <array>
@@ -29,7 +29,7 @@ enum packet_type : uint8_t {
 };
 
 // Returns NULL for an invalid packet type.
-const char *packet_type_to_string(uint8_t packet_type);
+const char *packet_type_to_string(uint8_t packetType);
 
 typedef uint8_t plr_t;
 typedef uint32_t cookie_t;
@@ -55,7 +55,7 @@ public:
 
 class wrong_packet_type_exception : public packet_exception {
 public:
-	wrong_packet_type_exception(std::initializer_list<packet_type> expected_types, std::uint8_t actual);
+	wrong_packet_type_exception(std::initializer_list<packet_type> expectedTypes, std::uint8_t actual);
 
 	const char *what() const throw() override
 	{
@@ -88,17 +88,17 @@ public:
 	packet(const key_t &k)
 	    : key(k) {};
 
-	const buffer_t &data();
+	const buffer_t &Data();
 
-	packet_type type();
-	plr_t src();
-	plr_t dest();
-	const buffer_t &message();
-	turn_t turn();
-	cookie_t cookie();
-	plr_t newplr();
-	const buffer_t &info();
-	leaveinfo_t leaveinfo();
+	packet_type Type();
+	plr_t Source() const;
+	plr_t Destination() const;
+	const buffer_t &Message();
+	turn_t Turn();
+	cookie_t Cookie();
+	plr_t NewPlayer();
+	const buffer_t &Info();
+	leaveinfo_t LeaveInfo();
 };
 
 template <class P>
@@ -111,11 +111,11 @@ public:
 class packet_in : public packet_proc<packet_in> {
 public:
 	using packet_proc<packet_in>::packet_proc;
-	void create(buffer_t buf);
+	void Create(buffer_t buf);
 	void process_element(buffer_t &x);
 	template <class T>
 	void process_element(T &x);
-	void decrypt();
+	void Decrypt();
 };
 
 class packet_out : public packet_proc<packet_out> {
@@ -132,7 +132,7 @@ public:
 	static const unsigned char *begin(const T &x);
 	template <class T>
 	static const unsigned char *end(const T &x);
-	void encrypt();
+	void Encrypt();
 };
 
 template <class P>
@@ -343,8 +343,8 @@ public:
 inline std::unique_ptr<packet> packet_factory::make_packet(buffer_t buf)
 {
 	auto ret = std::make_unique<packet_in>(key);
-	ret->create(std::move(buf));
-	ret->decrypt();
+	ret->Create(std::move(buf));
+	ret->Decrypt();
 	return ret;
 }
 
@@ -353,7 +353,7 @@ std::unique_ptr<packet> packet_factory::make_packet(Args... args)
 {
 	auto ret = std::make_unique<packet_out>(key);
 	ret->create<t>(args...);
-	ret->encrypt();
+	ret->Encrypt();
 	return ret;
 }
 

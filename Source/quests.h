@@ -5,11 +5,15 @@
  */
 #pragma once
 
-#include <stdint.h>
+#include <cstdint>
 
 #include "engine.h"
+#include "engine/cel_sprite.hpp"
+#include "engine/point.hpp"
 #include "gendung.h"
+#include "monster.h"
 #include "textdat.h"
+#include "utils/stdcompat/optional.hpp"
 
 namespace devilution {
 
@@ -40,60 +44,67 @@ enum quest_state : uint8_t {
 };
 
 struct QuestStruct {
-	Uint8 _qlevel;
-	Uint8 _qtype;
+	uint8_t _qlevel;
+	uint8_t _qtype;
 	quest_state _qactive;
 	dungeon_type _qlvltype;
-	Sint32 _qtx;
-	Sint32 _qty;
+	Point position;
 	_setlevels _qslvl;
-	Uint8 _qidx;
+	uint8_t _qidx;
 	_speech_id _qmsg;
-	Uint8 _qvar1;
-	Uint8 _qvar2;
+	uint8_t _qvar1;
+	uint8_t _qvar2;
 	bool _qlog;
 };
 
-struct QuestData {
-	Uint8 _qdlvl;
-	Sint8 _qdmultlvl;
+struct QuestDataStruct {
+	uint8_t _qdlvl;
+	int8_t _qdmultlvl;
 	dungeon_type _qlvlt;
-	Uint8 _qdtype;
-	Uint8 _qdrnd;
+	uint8_t _qdtype;
+	uint8_t _qdrnd;
 	_setlevels _qslvl;
 	bool isSinglePlayerOnly;
 	_speech_id _qdmsg;
 	const char *_qlstr;
 };
 
-extern bool questlog;
-extern BYTE *pQLogCel;
-extern QuestStruct quests[MAXQUESTS];
+extern bool QuestLogIsOpen;
+extern std::optional<CelSprite> pQLogCel;
+extern QuestStruct Quests[MAXQUESTS];
 extern int ReturnLvlX;
 extern int ReturnLvlY;
-extern dungeon_type ReturnLvlT;
-extern int ReturnLvl;
+extern dungeon_type ReturnLevelType;
+extern int ReturnLevel;
 
 void InitQuests();
+
+/**
+ * @brief Deactivates quests from each quest pool at random to provide variety for single player games
+ * @param seed The seed used to control which quests are deactivated
+ * @param quests The available quest list, this function will make some of them inactive by the time it returns
+*/
+void InitialiseQuestPools(uint32_t seed, QuestStruct quests[]);
 void CheckQuests();
 bool ForceQuests();
 bool QuestStatus(int i);
-void CheckQuestKill(int m, bool sendmsg);
+void CheckQuestKill(const MonsterStruct &monster, bool sendmsg);
 void DRLG_CheckQuests(int x, int y);
 void SetReturnLvlPos();
 void GetReturnLvlPos();
 void LoadPWaterPalette();
+void UpdatePWaterPalette();
 void ResyncMPQuests();
 void ResyncQuests();
-void DrawQuestLog(const CelOutputBuffer &out);
+void DrawQuestLog(const Surface &out);
 void StartQuestlog();
 void QuestlogUp();
 void QuestlogDown();
 void QuestlogEnter();
 void QuestlogESC();
-void SetMultiQuest(int q, quest_state s, int l, int v1);
+void SetMultiQuest(int q, quest_state s, bool log, int v1);
 
 /* rdata */
-extern QuestData questlist[];
+extern QuestDataStruct QuestData[];
 
 } // namespace devilution

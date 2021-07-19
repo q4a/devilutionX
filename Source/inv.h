@@ -5,8 +5,9 @@
  */
 #pragma once
 
-#include <stdint.h>
+#include <cstdint>
 
+#include "engine/point.hpp"
 #include "items.h"
 #include "palette.h"
 #include "player.h"
@@ -14,6 +15,9 @@
 namespace devilution {
 
 #define INV_SLOT_SIZE_PX 28
+#define INV_SLOT_HALF_SIZE_PX (INV_SLOT_SIZE_PX / 2)
+#define INV_ROW_SLOT_SIZE 10
+constexpr Size InventorySlotSizeInPixels { INV_SLOT_SIZE_PX, INV_SLOT_SIZE_PX };
 
 enum inv_item : int8_t {
 	// clang-format off
@@ -29,8 +33,6 @@ enum inv_item : int8_t {
 	INVITEM_BELT_FIRST = 47,
 	INVITEM_BELT_LAST  = 54,
 	// clang-format on
-	NUM_INVELEM,
-	INVITEM_INVALID = -1,
 };
 
 // identifiers for each of the inventory squares
@@ -50,33 +52,36 @@ enum inv_xy_slot : uint8_t {
 	SLOTXY_CHEST_LAST       = 24,
 
 	// regular inventory
-	SLOTXY_INV_FIRST = 25,
-	SLOTXY_INV_LAST  = 64,
+	SLOTXY_INV_FIRST        = 25,
+	SLOTXY_INV_ROW1_FIRST   = SLOTXY_INV_FIRST,
+	SLOTXY_INV_ROW1_LAST    = 34,
+	SLOTXY_INV_ROW2_FIRST   = 35,
+	SLOTXY_INV_ROW2_LAST    = 44,
+	SLOTXY_INV_ROW3_FIRST   = 45,
+	SLOTXY_INV_ROW3_LAST    = 54,
+	SLOTXY_INV_ROW4_FIRST   = 55,
+	SLOTXY_INV_ROW4_LAST    = 64,
+	SLOTXY_INV_LAST         = SLOTXY_INV_ROW4_LAST,
 
 	// belt items
-	SLOTXY_BELT_FIRST = 65,
-	SLOTXY_BELT_LAST  = 72,
-	NUM_XY_SLOTS      = 73
+	SLOTXY_BELT_FIRST       = 65,
+	SLOTXY_BELT_LAST        = 72,
+	NUM_XY_SLOTS            = 73
 	// clang-format on
 };
 
 enum item_color : uint8_t {
 	// clang-format off
 	ICOL_YELLOW = PAL16_YELLOW + 5,
-	ICOL_WHITE  = PAL16_GRAY + 5,
-	ICOL_BLUE   = PAL16_BLUE + 5,
-	ICOL_RED    = PAL16_RED + 5,
+	ICOL_WHITE  = PAL16_GRAY   + 5,
+	ICOL_BLUE   = PAL16_BLUE   + 5,
+	ICOL_RED    = PAL16_RED    + 5,
 	// clang-format on
-};
-
-struct InvXY {
-	Sint32 X;
-	Sint32 Y;
 };
 
 extern bool invflag;
 extern bool drawsbarflag;
-extern const InvXY InvRect[73];
+extern const Point InvRect[73];
 
 void FreeInvGFX();
 void InitInv();
@@ -84,51 +89,39 @@ void InitInv();
 /**
  * @brief Render the inventory panel to the given buffer.
  */
-void DrawInv(const CelOutputBuffer &out);
+void DrawInv(const Surface &out);
 
-void DrawInvBelt(const CelOutputBuffer &out);
+void DrawInvBelt(const Surface &out);
 bool AutoEquipEnabled(const PlayerStruct &player, const ItemStruct &item);
-bool AutoEquip(int playerNumber, const ItemStruct &item, bool persistItem = true);
-bool AutoPlaceItemInInventory(int playerNumber, const ItemStruct &item, bool persistItem = false);
-bool AutoPlaceItemInInventorySlot(int playerNumber, int slotIndex, const ItemStruct &item, bool persistItem);
-bool AutoPlaceItemInBelt(int playerNumber, const ItemStruct &item, bool persistItem = false);
-bool GoldAutoPlace(int pnum);
-void CheckInvSwap(int pnum, BYTE bLoc, int idx, WORD wCI, int seed, bool bId, uint32_t dwBuff);
+bool AutoEquip(int playerId, const ItemStruct &item, bool persistItem = true);
+bool AutoPlaceItemInInventory(PlayerStruct &player, const ItemStruct &item, bool persistItem = false);
+bool AutoPlaceItemInInventorySlot(PlayerStruct &player, int slotIndex, const ItemStruct &item, bool persistItem);
+bool AutoPlaceItemInBelt(PlayerStruct &player, const ItemStruct &item, bool persistItem = false);
+bool GoldAutoPlace(PlayerStruct &player);
+bool GoldAutoPlaceInInventorySlot(PlayerStruct &player, int slotIndex);
+void CheckInvSwap(int pnum, BYTE bLoc, int idx, uint16_t wCI, int seed, bool bId, uint32_t dwBuff);
 void inv_update_rem_item(int pnum, BYTE iv);
-
-/**
- * @brief Remove an item from player inventory
- * @param pnum Player index
- * @param iv invList index of item to be removed
- * @param calcPlrScrolls If true, CalcPlrScrolls() gets called after removing item
- */
-void RemoveInvItem(int pnum, int iv, bool calcPlrScrolls = true);
-
-void RemoveSpdBarItem(int pnum, int iv);
 void CheckInvItem(bool isShiftHeld = false);
 void CheckInvScrn(bool isShiftHeld);
-void CheckItemStats(int pnum);
+void CheckItemStats(PlayerStruct &player);
 void InvGetItem(int pnum, ItemStruct *item, int ii);
 void AutoGetItem(int pnum, ItemStruct *item, int ii);
-int FindGetItem(int idx, WORD ci, int iseed);
-void SyncGetItem(int x, int y, int idx, WORD ci, int iseed);
-bool CanPut(int x, int y);
+int FindGetItem(int idx, uint16_t ci, int iseed);
+void SyncGetItem(Point position, int idx, uint16_t ci, int iseed);
+bool CanPut(Point position);
 bool TryInvPut();
-void DrawInvMsg(const char *msg);
-int InvPutItem(int pnum, int x, int y);
-int SyncPutItem(int pnum, int x, int y, int idx, WORD icreateinfo, int iseed, int Id, int dur, int mdur, int ch, int mch, int ivalue, DWORD ibuff, int to_hit, int max_dam, int min_str, int min_mag, int min_dex, int ac);
+int InvPutItem(PlayerStruct &player, Point position);
+int SyncPutItem(PlayerStruct &player, Point position, int idx, uint16_t icreateinfo, int iseed, int Id, int dur, int mdur, int ch, int mch, int ivalue, uint32_t ibuff, int toHit, int maxDam, int minStr, int minMag, int minDex, int ac);
 char CheckInvHLight();
-void RemoveScroll(int pnum);
+void RemoveScroll(PlayerStruct &player);
 bool UseScroll();
-void UseStaffCharge(int pnum);
+void UseStaffCharge(PlayerStruct &player);
 bool UseStaff();
 bool UseInvItem(int pnum, int cii);
 void DoTelekinesis();
-int CalculateGold(int pnum);
+int CalculateGold(PlayerStruct &player);
 bool DropItemBeforeTrig();
 
 /* data */
-
-extern int AP2x2Tbl[10];
 
 } // namespace devilution

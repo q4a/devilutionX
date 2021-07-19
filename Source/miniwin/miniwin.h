@@ -1,64 +1,36 @@
 #pragma once
 
-#include <stdint.h>
+#include <cstdint>
 
-#include <ctype.h>
-#include <math.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <time.h>
+#include <cctype>
+#include <cmath>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <ctime>
 
 namespace devilution {
 
 #ifndef MAX_PATH
 #define MAX_PATH 260
 #endif
-#ifdef __has_attribute
-#define DVL_HAVE_ATTRIBUTE(x) __has_attribute(x)
-#else
-#define DVL_HAVE_ATTRIBUTE(x) 0
-#endif
-
-#if DVL_HAVE_ATTRIBUTE(format) || (defined(__GNUC__) && !defined(__clang__))
-#define DVL_PRINTF_ATTRIBUTE(fmtargnum, firstarg) \
-	__attribute__((__format__(__printf__, fmtargnum, firstarg)))
-#else
-#define DVL_PRINTF_ATTRIBUTE(fmtargnum)
-#endif
-
-typedef uint16_t SHORT;
-typedef int32_t LONG;
-
-typedef unsigned char UCHAR;
 
 typedef uint32_t DWORD;
 typedef unsigned char BYTE;
-typedef unsigned short WORD;
-typedef DWORD *LPDWORD;
-typedef void *LPVOID;
-typedef void *PVOID;
-
-typedef unsigned int UINT;
-
-typedef int32_t WPARAM;
-typedef int32_t LPARAM;
 
 //
 // Handles
 //
 typedef void *HANDLE;
 
-typedef HANDLE HMODULE, HDC, HINSTANCE;
+typedef void (*WNDPROC)(uint32_t, int32_t, int32_t);
 
-typedef void (*WNDPROC)(UINT, WPARAM, LPARAM);
-
-typedef struct tagMSG {
-	UINT message;
-	WPARAM wParam;
-	LPARAM lParam;
-} MSG, *LPMSG;
+struct tagMSG {
+	uint32_t message;
+	int32_t wParam;
+	int32_t lParam;
+};
 
 //
 // Everything else
@@ -67,13 +39,13 @@ typedef struct tagMSG {
 void SetCursorPos(int X, int Y);
 void FocusOnCharInfo();
 
-SHORT GetAsyncKeyState(int vKey);
+bool GetAsyncKeyState(int vKey);
 
-bool FetchMessage(LPMSG lpMsg);
+bool FetchMessage(tagMSG *lpMsg);
 
-bool TranslateMessage(const MSG *lpMsg);
-void PushMessage(const MSG *lpMsg);
-bool PostMessage(UINT Msg, WPARAM wParam, LPARAM lParam);
+bool TranslateMessage(const tagMSG *lpMsg);
+void PushMessage(const tagMSG *lpMsg);
+bool PostMessage(uint32_t type, int32_t wParam, int32_t lParam);
 
 #ifdef _MSC_VER
 #define strcasecmp _stricmp
@@ -116,6 +88,7 @@ bool PostMessage(UINT Msg, WPARAM wParam, LPARAM lParam);
 // Virtual key codes.
 //
 // ref: https://docs.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes
+#define DVL_VK_INVALID 0     // Invalid key
 #define DVL_VK_BACK 0x08     // BACKSPACE key
 #define DVL_VK_TAB 0x09      // TAB key
 #define DVL_VK_RETURN 0x0D   // ENTER key

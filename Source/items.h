@@ -5,14 +5,20 @@
  */
 #pragma once
 
-#include <stdint.h>
+#include <cstdint>
 
+#include "DiabloUI/ui_item.h"
+#include "engine/animationinfo.h"
+#include "engine/point.hpp"
 #include "engine.h"
 #include "itemdat.h"
+#include "monster.h"
+#include "utils/stdcompat/optional.hpp"
 
 namespace devilution {
 
 #define MAXITEMS 127
+#define ITEMTYPES 43
 
 #define GOLD_SMALL_LIMIT 1000
 #define GOLD_MEDIUM_LIMIT 2500
@@ -162,76 +168,79 @@ enum icreateinfo_flag2 {
 	// clang-format on
 };
 
+// All item animation frames have this width.
+constexpr int ItemAnimWidth = 96;
+
 struct ItemStruct {
-	Sint32 _iSeed;
-	Uint16 _iCreateInfo;
+	/** Randomly generated identifier */
+	int32_t _iSeed;
+	uint16_t _iCreateInfo;
 	enum item_type _itype;
-	Sint16 _ix;
-	Sint16 _iy;
+	Point position;
 	bool _iAnimFlag;
-	Uint8 *_iAnimData; // PSX name -> ItemFrame
-	Uint8 _iAnimLen;   // Number of frames in current animation
-	Uint8 _iAnimFrame; // Current frame of animation.
-	Sint32 _iAnimWidth;
-	Sint32 _iAnimWidth2; // width 2?
-	bool _iDelFlag;      // set when item is flagged for deletion, deprecated in 1.02
-	Uint8 _iSelFlag;
+	/*
+	 * @brief Contains Information for current Animation
+	 */
+	AnimationInfo AnimInfo;
+	bool _iDelFlag; // set when item is flagged for deletion, deprecated in 1.02
+	uint8_t _iSelFlag;
 	bool _iPostDraw;
 	bool _iIdentified;
-	Sint8 _iMagical;
+	item_quality _iMagical;
 	char _iName[64];
 	char _iIName[64];
 	enum item_equip_type _iLoc;
 	enum item_class _iClass;
-	Uint8 _iCurs;
-	Sint32 _ivalue;
-	Sint32 _iIvalue;
-	Uint8 _iMinDam;
-	Uint8 _iMaxDam;
-	Sint16 _iAC;
-	Sint32 _iFlags; // item_special_effect
+	uint8_t _iCurs;
+	int _ivalue;
+	int _iIvalue;
+	uint8_t _iMinDam;
+	uint8_t _iMaxDam;
+	int16_t _iAC;
+	uint32_t _iFlags; // item_special_effect
 	enum item_misc_id _iMiscId;
 	enum spell_id _iSpell;
-	Sint32 _iCharges;
-	Sint32 _iMaxCharges;
-	Uint8 _iDurability;
-	Uint8 _iMaxDur;
-	Sint16 _iPLDam;
-	Sint16 _iPLToHit;
-	Sint16 _iPLAC;
-	Sint16 _iPLStr;
-	Sint16 _iPLMag;
-	Sint16 _iPLDex;
-	Sint16 _iPLVit;
-	Sint16 _iPLFR;
-	Sint16 _iPLLR;
-	Sint16 _iPLMR;
-	Sint16 _iPLMana;
-	Sint16 _iPLHP;
-	Sint16 _iPLDamMod;
-	Sint16 _iPLGetHit;
-	Sint16 _iPLLight;
-	Sint8 _iSplLvlAdd;
-	Sint8 _iRequest;
-	Sint32 _iUid;
-	Sint16 _iFMinDam;
-	Sint16 _iFMaxDam;
-	Sint16 _iLMinDam;
-	Sint16 _iLMaxDam;
-	Sint16 _iPLEnAc;
+	int _iCharges;
+	int _iMaxCharges;
+	uint8_t _iDurability;
+	uint8_t _iMaxDur;
+	int16_t _iPLDam;
+	int16_t _iPLToHit;
+	int16_t _iPLAC;
+	int16_t _iPLStr;
+	int16_t _iPLMag;
+	int16_t _iPLDex;
+	int16_t _iPLVit;
+	int16_t _iPLFR;
+	int16_t _iPLLR;
+	int16_t _iPLMR;
+	int16_t _iPLMana;
+	int16_t _iPLHP;
+	int16_t _iPLDamMod;
+	int16_t _iPLGetHit;
+	int16_t _iPLLight;
+	int8_t _iSplLvlAdd;
+	bool _iRequest;
+	/** Unique item ID, used as an index into UniqueItemList */
+	int _iUid;
+	int16_t _iFMinDam;
+	int16_t _iFMaxDam;
+	int16_t _iLMinDam;
+	int16_t _iLMaxDam;
+	int16_t _iPLEnAc;
 	enum item_effect_type _iPrePower;
 	enum item_effect_type _iSufPower;
-	Sint32 _iVAdd1;
-	Sint32 _iVMult1;
-	Sint32 _iVAdd2;
-	Sint32 _iVMult2;
-	Sint8 _iMinStr;
-	Uint8 _iMinMag;
-	Sint8 _iMinDex;
+	int _iVAdd1;
+	int _iVMult1;
+	int _iVAdd2;
+	int _iVMult2;
+	int8_t _iMinStr;
+	uint8_t _iMinMag;
+	int8_t _iMinDex;
 	bool _iStatFlag;
-	Sint32 IDidx;
-	Uint32 dwBuff;
-	Sint32 _iDamAcFlags;
+	_item_indexes IDidx;
+	uint32_t dwBuff;
+	uint32_t _iDamAcFlags;
 
 	/**
 	 * @brief Checks whether this item is empty or not.
@@ -347,68 +356,87 @@ struct ItemStruct {
 			return false;
 		}
 	}
+
+	UiFlags getTextColor() const
+	{
+		switch (_iMagical) {
+		case ITEM_QUALITY_MAGIC:
+			return UIS_BLUE;
+		case ITEM_QUALITY_UNIQUE:
+			return UIS_GOLD;
+		default:
+			return UIS_SILVER;
+		}
+	}
+
+	UiFlags getTextColorWithStatCheck() const
+	{
+		if (!_iStatFlag)
+			return UIS_RED;
+		return getTextColor();
+	}
+
+	/**
+	 * @brief Sets the current Animation for the Item
+	 * @param showAnimation Definies if the Animation (Flipping) is shown or if only the final Frame (item on the ground) is shown
+	 */
+	void SetNewAnimation(bool showAnimation);
 };
 
 struct ItemGetRecordStruct {
-	Sint32 nSeed;
-	Uint16 wCI;
-	Sint32 nIndex;
-	Uint32 dwTimestamp;
+	int32_t nSeed;
+	uint16_t wCI;
+	int nIndex;
+	uint32_t dwTimestamp;
 };
 
 struct CornerStoneStruct {
-	Sint32 x;
-	Sint32 y;
+	Point position;
 	bool activated;
 	ItemStruct item;
 };
 
-extern int itemactive[MAXITEMS];
-extern bool uitemflag;
-extern int itemavail[MAXITEMS];
-extern ItemStruct items[MAXITEMS + 1];
+extern ItemStruct Items[MAXITEMS + 1];
+extern int ActiveItems[MAXITEMS];
+extern int ActiveItemCount;
+extern int AvailableItems[MAXITEMS];
+extern bool ShowUniqueItemInfoBox;
 extern CornerStoneStruct CornerStone;
 extern bool UniqueItemFlags[128];
-extern int numitems;
 
-BYTE GetOutlineColor(ItemStruct &item, bool checkReq);
+BYTE GetOutlineColor(const ItemStruct &item, bool checkReq);
 bool IsItemAvailable(int i);
 bool IsUniqueAvailable(int i);
 void InitItemGFX();
 void InitItems();
 void CalcPlrItemVals(int p, bool Loadgfx);
-void CalcPlrScrolls(int p);
-void CalcPlrStaff(int p);
 void CalcPlrInv(int p, bool Loadgfx);
 void SetPlrHandItem(ItemStruct *h, int idata);
 void GetPlrHandSeed(ItemStruct *h);
 void GetGoldSeed(int pnum, ItemStruct *h);
 int GetGoldCursor(int value);
 void SetPlrHandGoldCurs(ItemStruct *h);
-void CreatePlrItems(int p);
-bool ItemSpaceOk(int i, int j);
+void CreatePlrItems(int playerId);
+bool ItemSpaceOk(Point position);
 int AllocateItem();
-void GetSuperItemLoc(int x, int y, int *xx, int *yy);
+Point GetSuperItemLoc(Point position);
 void GetItemAttrs(int i, int idata, int lvl);
-void SaveItemPower(int i, item_effect_type power, int param1, int param2, int minval, int maxval, int multval);
-void GetItemPower(int i, int minlvl, int maxlvl, affix_item_type flgs, bool onlygood);
 void SetupItem(int i);
-int RndItem(int m);
-void SpawnUnique(_unique_items uid, int x, int y);
-void SpawnItem(int m, int x, int y, bool sendmsg);
-void CreateRndItem(int x, int y, bool onlygood, bool sendmsg, bool delta);
-void CreateRndUseful(int x, int y, bool sendmsg);
-void CreateTypeItem(int x, int y, bool onlygood, int itype, int imisc, bool sendmsg, bool delta);
-void RecreateItem(int ii, int idx, WORD icreateinfo, int iseed, int ivalue, bool isHellfire);
-void RecreateEar(int ii, WORD ic, int iseed, int Id, int dur, int mdur, int ch, int mch, int ivalue, int ibuff);
-void items_427A72();
-void items_427ABA(int x, int y);
-void SpawnQuestItem(int itemid, int x, int y, int randarea, int selflag);
-void SpawnRock();
-void SpawnRewardItem(int itemid, int xx, int yy);
-void SpawnMapOfDoom(int xx, int yy);
-void SpawnRuneBomb(int xx, int yy);
-void SpawnTheodore(int xx, int yy);
+int RndItem(const MonsterStruct &monster);
+void SpawnUnique(_unique_items uid, Point position);
+void SpawnItem(MonsterStruct &monster, Point position, bool sendmsg);
+void CreateRndItem(Point position, bool onlygood, bool sendmsg, bool delta);
+void CreateRndUseful(Point position, bool sendmsg);
+void CreateTypeItem(Point position, bool onlygood, int itype, int imisc, bool sendmsg, bool delta);
+void RecreateItem(int ii, int idx, uint16_t icreateinfo, int iseed, int ivalue, bool isHellfire);
+void RecreateEar(int ii, uint16_t ic, int iseed, int Id, int dur, int mdur, int ch, int mch, int ivalue, int ibuff);
+void CornerstoneSave();
+void CornerstoneLoad(Point position);
+void SpawnQuestItem(int itemid, Point position, int randarea, int selflag);
+void SpawnRewardItem(int itemid, Point position);
+void SpawnMapOfDoom(Point position);
+void SpawnRuneBomb(Point position);
+void SpawnTheodore(Point position);
 void RespawnItem(ItemStruct *item, bool FlipFlag);
 void DeleteItem(int ii, int i);
 void ProcessItems();
@@ -420,28 +448,24 @@ void DoRepair(int pnum, int cii);
 void DoRecharge(int pnum, int cii);
 void DoOil(int pnum, int cii);
 void PrintItemPower(char plidx, ItemStruct *x);
-void DrawUniqueInfo(const CelOutputBuffer &out);
+void DrawUniqueInfo(const Surface &out);
 void PrintItemDetails(ItemStruct *x);
 void PrintItemDur(ItemStruct *x);
 void UseItem(int p, item_misc_id Mid, spell_id spl);
-bool StoreStatOk(ItemStruct *h);
 void SpawnSmith(int lvl);
 void SpawnPremium(int pnum);
-void WitchBookLevel(int ii);
 void SpawnWitch(int lvl);
 void SpawnBoy(int lvl);
 void SpawnHealer(int lvl);
 void SpawnStoreGold();
-void RecreateTownItem(int ii, int idx, WORD icreateinfo, int iseed);
-void RecalcStoreStats();
 int ItemNoFlippy();
-void CreateSpellBook(int x, int y, spell_id ispell, bool sendmsg, bool delta);
-void CreateMagicArmor(int x, int y, int imisc, int icurs, bool sendmsg, bool delta);
-void CreateAmulet(int x, int y, int curlv, bool sendmsg, bool delta);
-void CreateMagicWeapon(int x, int y, int imisc, int icurs, bool sendmsg, bool delta);
-bool GetItemRecord(int nSeed, WORD wCI, int nIndex);
-void SetItemRecord(int nSeed, WORD wCI, int nIndex);
-void PutItemRecord(int nSeed, WORD wCI, int nIndex);
+void CreateSpellBook(Point position, spell_id ispell, bool sendmsg, bool delta);
+void CreateMagicArmor(Point position, int imisc, int icurs, bool sendmsg, bool delta);
+void CreateAmulet(Point position, int lvl, bool sendmsg, bool delta);
+void CreateMagicWeapon(Point position, int imisc, int icurs, bool sendmsg, bool delta);
+bool GetItemRecord(int nSeed, uint16_t wCI, int nIndex);
+void SetItemRecord(int nSeed, uint16_t wCI, int nIndex);
+void PutItemRecord(int nSeed, uint16_t wCI, int nIndex);
 
 /* data */
 

@@ -5,11 +5,14 @@
  */
 #pragma once
 
+#include <memory>
+#include "utils/stdcompat/cstddef.hpp"
+
 namespace devilution {
 
 void dthread_remove_player(uint8_t pnum);
-void dthread_send_delta(int pnum, char cmd, void *pbSrc, int dwLen);
+void dthread_send_delta(int pnum, _cmd_id cmd, std::unique_ptr<byte[]> data, uint32_t len);
 void dthread_start();
-void dthread_cleanup();
+void DThreadCleanup();
 
 } // namespace devilution

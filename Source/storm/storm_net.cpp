@@ -1,12 +1,13 @@
 #include <memory>
 #ifndef NONET
+#include "utils/sdl_mutex.h"
 #include <mutex>
 #include <thread>
 #include <utility>
 #endif
 
 #include "dvlnet/abstract_net.h"
-#include "mainmenu.h"
+#include "menu.h"
 #include "options.h"
 #include "storm/storm_dvlnet.h"
 #include "utils/stubs.h"
@@ -18,13 +19,13 @@ static char gpszGameName[128] = {};
 static char gpszGamePassword[128] = {};
 
 #ifndef NONET
-static std::mutex storm_net_mutex;
+static SdlMutex storm_net_mutex;
 #endif
 
-bool SNetReceiveMessage(int *senderplayerid, char **data, int *databytes)
+bool SNetReceiveMessage(int *senderplayerid, void **data, uint32_t *databytes)
 {
 #ifndef NONET
-	std::lock_guard<std::mutex> lg(storm_net_mutex);
+	std::lock_guard<SdlMutex> lg(storm_net_mutex);
 #endif
 	if (!dvlnet_inst->SNetReceiveMessage(senderplayerid, data, databytes)) {
 		SErrSetLastError(STORM_ERROR_NO_MESSAGES_WAITING);
@@ -36,19 +37,16 @@ bool SNetReceiveMessage(int *senderplayerid, char **data, int *databytes)
 bool SNetSendMessage(int playerID, void *data, unsigned int databytes)
 {
 #ifndef NONET
-	std::lock_guard<std::mutex> lg(storm_net_mutex);
+	std::lock_guard<SdlMutex> lg(storm_net_mutex);
 #endif
 	return dvlnet_inst->SNetSendMessage(playerID, data, databytes);
 }
 
-bool SNetReceiveTurns(int a1, int arraysize, char **arraydata, unsigned int *arraydatabytes,
-    DWORD *arrayplayerstatus)
+bool SNetReceiveTurns(int arraysize, char **arraydata, size_t *arraydatabytes, uint32_t *arrayplayerstatus)
 {
 #ifndef NONET
-	std::lock_guard<std::mutex> lg(storm_net_mutex);
+	std::lock_guard<SdlMutex> lg(storm_net_mutex);
 #endif
-	if (a1 != 0)
-		UNIMPLEMENTED();
 	if (arraysize != MAX_PLRS)
 		UNIMPLEMENTED();
 	if (!dvlnet_inst->SNetReceiveTurns(arraydata, arraydatabytes, arrayplayerstatus)) {
@@ -61,31 +59,31 @@ bool SNetReceiveTurns(int a1, int arraysize, char **arraydata, unsigned int *arr
 bool SNetSendTurn(char *data, unsigned int databytes)
 {
 #ifndef NONET
-	std::lock_guard<std::mutex> lg(storm_net_mutex);
+	std::lock_guard<SdlMutex> lg(storm_net_mutex);
 #endif
 	return dvlnet_inst->SNetSendTurn(data, databytes);
 }
 
-int SNetGetProviderCaps(struct _SNETCAPS *caps)
+void SNetGetProviderCaps(struct _SNETCAPS *caps)
 {
 #ifndef NONET
-	std::lock_guard<std::mutex> lg(storm_net_mutex);
+	std::lock_guard<SdlMutex> lg(storm_net_mutex);
 #endif
-	return dvlnet_inst->SNetGetProviderCaps(caps);
+	dvlnet_inst->SNetGetProviderCaps(caps);
 }
 
-bool SNetUnregisterEventHandler(event_type evtype, SEVTHANDLER func)
+bool SNetUnregisterEventHandler(event_type evtype)
 {
 #ifndef NONET
-	std::lock_guard<std::mutex> lg(storm_net_mutex);
+	std::lock_guard<SdlMutex> lg(storm_net_mutex);
 #endif
-	return dvlnet_inst->SNetUnregisterEventHandler(evtype, func);
+	return dvlnet_inst->SNetUnregisterEventHandler(evtype);
 }
 
 bool SNetRegisterEventHandler(event_type evtype, SEVTHANDLER func)
 {
 #ifndef NONET
-	std::lock_guard<std::mutex> lg(storm_net_mutex);
+	std::lock_guard<SdlMutex> lg(storm_net_mutex);
 #endif
 	return dvlnet_inst->SNetRegisterEventHandler(evtype, func);
 }
@@ -93,15 +91,15 @@ bool SNetRegisterEventHandler(event_type evtype, SEVTHANDLER func)
 bool SNetDestroy()
 {
 #ifndef NONET
-	std::lock_guard<std::mutex> lg(storm_net_mutex);
+	std::lock_guard<SdlMutex> lg(storm_net_mutex);
 #endif
 	return true;
 }
 
-bool SNetDropPlayer(int playerid, DWORD flags)
+bool SNetDropPlayer(int playerid, uint32_t flags)
 {
 #ifndef NONET
-	std::lock_guard<std::mutex> lg(storm_net_mutex);
+	std::lock_guard<SdlMutex> lg(storm_net_mutex);
 #endif
 	return dvlnet_inst->SNetDropPlayer(playerid, flags);
 }
@@ -109,7 +107,7 @@ bool SNetDropPlayer(int playerid, DWORD flags)
 bool SNetGetGameInfo(game_info type, void *dst, unsigned int length)
 {
 #ifndef NONET
-	std::lock_guard<std::mutex> lg(storm_net_mutex);
+	std::lock_guard<SdlMutex> lg(storm_net_mutex);
 #endif
 	switch (type) {
 	case GAMEINFO_NAME:
@@ -126,7 +124,7 @@ bool SNetGetGameInfo(game_info type, void *dst, unsigned int length)
 bool SNetLeaveGame(int type)
 {
 #ifndef NONET
-	std::lock_guard<std::mutex> lg(storm_net_mutex);
+	std::lock_guard<SdlMutex> lg(storm_net_mutex);
 #endif
 	if (dvlnet_inst == nullptr)
 		return true;
@@ -137,12 +135,12 @@ bool SNetLeaveGame(int type)
  * @brief Called by engine for single, called by ui for multi
  * @param provider BNET, IPXN, MODM, SCBL or UDPN
  */
-bool SNetInitializeProvider(Uint32 provider, struct GameData *gameData)
+bool SNetInitializeProvider(uint32_t provider, struct GameData *gameData)
 {
 #ifndef NONET
-	std::lock_guard<std::mutex> lg(storm_net_mutex);
+	std::lock_guard<SdlMutex> lg(storm_net_mutex);
 #endif
-	dvlnet_inst = net::abstract_net::make_net(provider);
+	dvlnet_inst = net::abstract_net::MakeNet(provider);
 	return mainmenu_select_hero_dialog(gameData);
 }
 
@@ -152,7 +150,7 @@ bool SNetInitializeProvider(Uint32 provider, struct GameData *gameData)
 bool SNetCreateGame(const char *pszGameName, const char *pszGamePassword, char *gameTemplateData, int gameTemplateSize, int *playerID)
 {
 #ifndef NONET
-	std::lock_guard<std::mutex> lg(storm_net_mutex);
+	std::lock_guard<SdlMutex> lg(storm_net_mutex);
 #endif
 	if (gameTemplateSize != sizeof(GameData))
 		ABORT();
@@ -160,13 +158,13 @@ bool SNetCreateGame(const char *pszGameName, const char *pszGamePassword, char *
 	dvlnet_inst->setup_gameinfo(std::move(gameInitInfo));
 
 	std::string defaultName;
-	if (!pszGameName) {
+	if (pszGameName == nullptr) {
 		defaultName = dvlnet_inst->make_default_gamename();
 		pszGameName = defaultName.c_str();
 	}
 
 	strncpy(gpszGameName, pszGameName, sizeof(gpszGameName) - 1);
-	if (pszGamePassword)
+	if (pszGamePassword != nullptr)
 		strncpy(gpszGamePassword, pszGamePassword, sizeof(gpszGamePassword) - 1);
 	*playerID = dvlnet_inst->create(pszGameName, pszGamePassword);
 	return *playerID != -1;
@@ -175,11 +173,11 @@ bool SNetCreateGame(const char *pszGameName, const char *pszGamePassword, char *
 bool SNetJoinGame(char *pszGameName, char *pszGamePassword, int *playerID)
 {
 #ifndef NONET
-	std::lock_guard<std::mutex> lg(storm_net_mutex);
+	std::lock_guard<SdlMutex> lg(storm_net_mutex);
 #endif
-	if (pszGameName)
+	if (pszGameName != nullptr)
 		strncpy(gpszGameName, pszGameName, sizeof(gpszGameName) - 1);
-	if (pszGamePassword)
+	if (pszGamePassword != nullptr)
 		strncpy(gpszGamePassword, pszGamePassword, sizeof(gpszGamePassword) - 1);
 	*playerID = dvlnet_inst->join(pszGameName, pszGamePassword);
 	return *playerID != -1;
@@ -188,18 +186,18 @@ bool SNetJoinGame(char *pszGameName, char *pszGamePassword, int *playerID)
 /**
  * @brief Is this the mirror image of SNetGetTurnsInTransit?
  */
-bool SNetGetOwnerTurnsWaiting(DWORD *turns)
+bool SNetGetOwnerTurnsWaiting(uint32_t *turns)
 {
 #ifndef NONET
-	std::lock_guard<std::mutex> lg(storm_net_mutex);
+	std::lock_guard<SdlMutex> lg(storm_net_mutex);
 #endif
 	return dvlnet_inst->SNetGetOwnerTurnsWaiting(turns);
 }
 
-bool SNetGetTurnsInTransit(DWORD *turns)
+bool SNetGetTurnsInTransit(uint32_t *turns)
 {
 #ifndef NONET
-	std::lock_guard<std::mutex> lg(storm_net_mutex);
+	std::lock_guard<SdlMutex> lg(storm_net_mutex);
 #endif
 	return dvlnet_inst->SNetGetTurnsInTransit(turns);
 }
@@ -207,10 +205,10 @@ bool SNetGetTurnsInTransit(DWORD *turns)
 /**
  * @brief engine calls this only once with argument 1
  */
-bool SNetSetBasePlayer(int)
+bool SNetSetBasePlayer(int /*unused*/)
 {
 #ifndef NONET
-	std::lock_guard<std::mutex> lg(storm_net_mutex);
+	std::lock_guard<SdlMutex> lg(storm_net_mutex);
 #endif
 	return true;
 }

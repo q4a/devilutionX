@@ -5,57 +5,52 @@
 
 using namespace devilution;
 
-TEST(Effects, calc_snd_position_center)
+TEST(Effects, CalculateSoundPosition_center)
 {
-	plr[myplr]._px = 50;
-	plr[myplr]._py = 50;
+	Players[MyPlayerId].position.tile = { 50, 50 };
 	int plVolume = 0;
 	int plPan = 0;
-	EXPECT_EQ(calc_snd_position(50, 50, &plVolume, &plPan), true);
+	EXPECT_EQ(CalculateSoundPosition({ 50, 50 }, &plVolume, &plPan), true);
 	EXPECT_EQ(plVolume, 0);
 	EXPECT_EQ(plPan, 0);
 }
 
-TEST(Effects, calc_snd_position_near)
+TEST(Effects, CalculateSoundPosition_near)
 {
-	plr[myplr]._px = 50;
-	plr[myplr]._py = 50;
+	Players[MyPlayerId].position.tile = { 50, 50 };
 	int plVolume = 0;
 	int plPan = 0;
-	EXPECT_EQ(calc_snd_position(55, 50, &plVolume, &plPan), true);
+	EXPECT_EQ(CalculateSoundPosition({ 55, 50 }, &plVolume, &plPan), true);
 	EXPECT_EQ(plVolume, -320);
 	EXPECT_EQ(plPan, 1280);
 }
 
-TEST(Effects, calc_snd_position_out_of_range)
+TEST(Effects, CalculateSoundPosition_out_of_range)
 {
-	plr[myplr]._px = 12;
-	plr[myplr]._py = 12;
-	int plVolume = 0;
+	Players[MyPlayerId].position.tile = { 12, 12 };
+	int plVolume = 1234;
 	int plPan = 0;
-	EXPECT_EQ(calc_snd_position(112, 112, &plVolume, &plPan), false);
-	ASSERT_GE(plVolume, 6400);
+	EXPECT_EQ(CalculateSoundPosition({ 112, 112 }, &plVolume, &plPan), false);
+	EXPECT_EQ(plVolume, 1234);
 	EXPECT_EQ(plPan, 0);
 }
 
-TEST(Effects, calc_snd_position_extream_right)
+TEST(Effects, CalculateSoundPosition_extreme_right)
 {
-	plr[myplr]._px = 50;
-	plr[myplr]._py = 50;
+	Players[MyPlayerId].position.tile = { 50, 50 };
 	int plVolume = 0;
 	int plPan = 0;
-	EXPECT_EQ(calc_snd_position(76, 50, &plVolume, &plPan), false);
-	EXPECT_EQ(plVolume, 0);
-	EXPECT_GT(plPan, 6400);
+	EXPECT_EQ(CalculateSoundPosition({ 75, 25 }, &plVolume, &plPan), true);
+	EXPECT_EQ(plVolume, -2176);
+	EXPECT_EQ(plPan, 6400);
 }
 
-TEST(Effects, calc_snd_position_extream_left)
+TEST(Effects, CalculateSoundPosition_extreme_left)
 {
-	plr[myplr]._px = 50;
-	plr[myplr]._py = 50;
+	Players[MyPlayerId].position.tile = { 50, 50 };
 	int plVolume = 0;
 	int plPan = 0;
-	EXPECT_EQ(calc_snd_position(24, 50, &plVolume, &plPan), false);
-	EXPECT_EQ(plVolume, 0);
-	EXPECT_LT(plPan, -6400);
+	EXPECT_EQ(CalculateSoundPosition({ 25, 75 }, &plVolume, &plPan), true);
+	EXPECT_EQ(plVolume, -2176);
+	EXPECT_EQ(plPan, -6400);
 }

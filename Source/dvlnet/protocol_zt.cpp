@@ -16,8 +16,10 @@
 #include <lwip/tcpip.h>
 
 #include "dvlnet/zerotier_native.h"
+#include "utils/log.hpp"
 
-namespace devilution::net {
+namespace devilution {
+namespace net {
 
 protocol_zt::protocol_zt()
 {
@@ -60,7 +62,7 @@ bool protocol_zt::network_online()
 		set_reuseaddr(fd_udp);
 		auto ret = lwip_bind(fd_udp, (struct sockaddr *)&in6, sizeof(in6));
 		if (ret < 0) {
-			SDL_Log("lwip, (udp) bind: %s\n", strerror(errno));
+			Log("lwip, (udp) bind: {}", strerror(errno));
 			throw protocol_exception();
 		}
 		set_nonblock(fd_udp);
@@ -70,12 +72,12 @@ bool protocol_zt::network_online()
 		set_reuseaddr(fd_tcp);
 		auto r1 = lwip_bind(fd_tcp, (struct sockaddr *)&in6, sizeof(in6));
 		if (r1 < 0) {
-			SDL_Log("lwip, (tcp) bind: %s\n", strerror(errno));
+			Log("lwip, (tcp) bind: {}", strerror(errno));
 			throw protocol_exception();
 		}
 		auto r2 = lwip_listen(fd_tcp, 10);
 		if (r2 < 0) {
-			SDL_Log("lwip, listen: %s\n", strerror(errno));
+			Log("lwip, listen: {}", strerror(errno));
 			throw protocol_exception();
 		}
 		set_nonblock(fd_tcp);
@@ -86,11 +88,11 @@ bool protocol_zt::network_online()
 
 bool protocol_zt::send(const endpoint &peer, const buffer_t &data)
 {
-	peer_list[peer].send_queue.push_back(frame_queue::make_frame(data));
+	peer_list[peer].send_queue.push_back(frame_queue::MakeFrame(data));
 	return true;
 }
 
-bool protocol_zt::send_oob(const endpoint &peer, const buffer_t &data)
+bool protocol_zt::send_oob(const endpoint &peer, const buffer_t &data) const
 {
 	struct sockaddr_in6 in6 {
 	};
@@ -101,7 +103,7 @@ bool protocol_zt::send_oob(const endpoint &peer, const buffer_t &data)
 	return true;
 }
 
-bool protocol_zt::send_oob_mc(const buffer_t &data)
+bool protocol_zt::send_oob_mc(const buffer_t &data) const
 {
 	endpoint mc;
 	std::copy(dvl_multicast_addr, dvl_multicast_addr + 16, mc.addr.begin());
@@ -133,7 +135,8 @@ bool protocol_zt::send_queued_peer(const endpoint &peer)
 			auto it = peer_list[peer].send_queue.front().begin();
 			peer_list[peer].send_queue.front().erase(it, it + r);
 			return true;
-		} else if (decltype(len)(r) == len) {
+		}
+		if (decltype(len)(r) == len) {
 			peer_list[peer].send_queue.pop_front();
 		} else {
 			throw protocol_exception();
@@ -148,12 +151,9 @@ bool protocol_zt::recv_peer(const endpoint &peer)
 	while (true) {
 		auto len = lwip_recv(peer_list[peer].fd, buf, sizeof(buf), 0);
 		if (len >= 0) {
-			peer_list[peer].recv_queue.write(buffer_t(buf, buf + len));
+			peer_list[peer].recv_queue.Write(buffer_t(buf, buf + len));
 		} else {
-			if (errno == EAGAIN || errno == EWOULDBLOCK) {
-				return true;
-			}
-			return false;
+			return errno == EAGAIN || errno == EWOULDBLOCK;
 		}
 	}
 }
@@ -162,7 +162,7 @@ bool protocol_zt::send_queued_all()
 {
 	for (auto &peer : peer_list) {
 		if (!send_queued_peer(peer.first)) {
-			// disconnect this peer
+			// handle error?
 		}
 	}
 	return true;
@@ -173,7 +173,7 @@ bool protocol_zt::recv_from_peers()
 	for (auto &peer : peer_list) {
 		if (peer.second.fd != -1) {
 			if (!recv_peer(peer.first)) {
-				// error, disconnect?
+				disconnect_queue.push_back(peer.first);
 			}
 		}
 	}
@@ -208,7 +208,7 @@ bool protocol_zt::accept_all()
 		endpoint ep;
 		std::copy(in6.sin6_addr.s6_addr, in6.sin6_addr.s6_addr + 16, ep.addr.begin());
 		if (peer_list[ep].fd != -1) {
-			SDL_Log("protocol_zt::accept_all: WARNING: overwriting connection\n");
+			Log("protocol_zt::accept_all: WARNING: overwriting connection");
 			lwip_close(peer_list[ep].fd);
 		}
 		set_nonblock(newfd);
@@ -233,21 +233,31 @@ bool protocol_zt::recv(endpoint &peer, buffer_t &data)
 	}
 
 	for (auto &p : peer_list) {
-		if (p.second.recv_queue.packet_ready()) {
+		if (p.second.recv_queue.PacketReady()) {
 			peer = p.first;
-			data = p.second.recv_queue.read_packet();
+			data = p.second.recv_queue.ReadPacket();
 			return true;
 		}
 	}
 	return false;
 }
 
+bool protocol_zt::get_disconnected(endpoint &peer)
+{
+	if (!disconnect_queue.empty()) {
+		peer = disconnect_queue.front();
+		disconnect_queue.pop_front();
+		return true;
+	}
+	return false;
+}
+
 void protocol_zt::disconnect(const endpoint &peer)
 {
-	if (peer_list.count(peer)) {
+	if (peer_list.count(peer) != 0) {
 		if (peer_list[peer].fd != -1) {
 			if (lwip_close(peer_list[peer].fd) < 0) {
-				SDL_Log("lwip_close: %s\n", strerror(errno));
+				Log("lwip_close: {}", strerror(errno));
 			}
 		}
 		peer_list.erase(peer);
@@ -279,7 +289,7 @@ protocol_zt::~protocol_zt()
 void protocol_zt::endpoint::from_string(const std::string &str)
 {
 	ip_addr_t a;
-	if (!ipaddr_aton(str.c_str(), &a))
+	if (ipaddr_aton(str.c_str(), &a) == 0)
 		return;
 	if (!IP_IS_V6_VAL(a))
 		return;
@@ -304,4 +314,5 @@ std::string protocol_zt::make_default_gamename()
 	return ret;
 }
 
-} // namespace devilution::net
+} // namespace net
+} // namespace devilution

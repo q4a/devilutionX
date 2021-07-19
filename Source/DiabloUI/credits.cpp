@@ -10,7 +10,10 @@
 #include "DiabloUI/support_lines.h"
 #include "control.h"
 #include "controls/menu_controls.h"
+#include "hwcursor.hpp"
 #include "utils/display.h"
+#include "utils/language.h"
+#include "utils/log.hpp"
 #include "utils/sdl_compat.h"
 #include "utils/sdl_ptrs.h"
 
@@ -23,7 +26,7 @@ const int ShadowOffsetX = 2;
 const int ShadowOffsetY = 2;
 const int LINE_H = 22;
 
-char const *const *text;
+char const *const *Text;
 std::size_t textLines;
 
 // The maximum number of visible lines is the number of whole lines
@@ -35,35 +38,35 @@ struct CachedLine {
 
 	CachedLine()
 	{
-		m_index = 0;
-		palette_version = pal_surface_palette_version;
+		mIndex = 0;
+		paletteVersion = pal_surface_palette_version;
 	}
 
 	CachedLine(std::size_t index, SDLSurfaceUniquePtr surface)
 	{
-		m_index = index;
-		m_surface = std::move(surface);
-		palette_version = pal_surface_palette_version;
+		mIndex = index;
+		mSurface = std::move(surface);
+		paletteVersion = pal_surface_palette_version;
 	}
 
-	std::size_t m_index;
-	SDLSurfaceUniquePtr m_surface;
-	unsigned int palette_version;
+	std::size_t mIndex;
+	SDLSurfaceUniquePtr mSurface;
+	unsigned int paletteVersion;
 };
 
 SDL_Surface *RenderText(const char *text, SDL_Color color)
 {
 	if (text[0] == '\0')
 		return nullptr;
-	SDL_Surface *result = TTF_RenderUTF8_Solid(font, text, color);
+	SDL_Surface *result = TTF_RenderText_Solid(font, text, color);
 	if (result == nullptr)
-		SDL_Log("%s", TTF_GetError());
+		Log("{}", TTF_GetError());
 	return result;
 }
 
 CachedLine PrepareLine(std::size_t index)
 {
-	const char *contents = text[index];
+	const char *contents = _(Text[index]);
 	while (contents[0] == '\t')
 		++contents;
 
@@ -76,10 +79,10 @@ CachedLine PrepareLine(std::size_t index)
 		// Set up the target surface to have 3 colors: mask, text, and shadow.
 		surface = SDLSurfaceUniquePtr { SDL_CreateRGBSurfaceWithFormat(0, text->w + ShadowOffsetX, text->h + ShadowOffsetY, 8, SDL_PIXELFORMAT_INDEX8) };
 		const SDL_Color maskColor = { 0, 255, 0, 0 }; // Any color different from both shadow and text
-		const SDL_Color &textColor = palette->colors[224];
+		const SDL_Color &textColor = Palette->colors[224];
 		SDL_Color colors[3] = { maskColor, textColor, shadowColor };
 		if (SDLC_SetSurfaceColors(surface.get(), colors, 0, 3) <= -1)
-			SDL_Log("%s", SDL_GetError());
+			Log("{}", SDL_GetError());
 		SDLC_SetColorKey(surface.get(), 0);
 
 		// Blit the shadow first:
@@ -122,7 +125,7 @@ public:
 
 	void Render();
 
-	bool Finished() const
+	[[nodiscard]] bool Finished() const
 	{
 		return finished_;
 	}
@@ -169,24 +172,24 @@ void CreditsRenderer::Render()
 	Sint16 destY = UI_OFFSET_Y + VIEWPORT.y - (offsetY - linesBegin * LINE_H);
 	for (std::size_t i = linesBegin; i < linesEnd; ++i, destY += LINE_H) {
 		CachedLine &line = lines_[i];
-		if (line.m_surface == nullptr)
+		if (line.mSurface == nullptr)
 			continue;
 
 		// Still fading in: the cached line was drawn with a different fade level.
-		if (line.palette_version != pal_surface_palette_version) {
-			line = PrepareLine(line.m_index);
+		if (line.paletteVersion != pal_surface_palette_version) {
+			line = PrepareLine(line.mIndex);
 		}
 
 		Sint16 destX = PANEL_LEFT + VIEWPORT.x + 31;
 		int j = 0;
-		while (text[line.m_index][j++] == '\t')
+		while (Text[line.mIndex][j++] == '\t')
 			destX += 40;
 
 		SDL_Rect dstRect = { destX, destY, 0, 0 };
 		ScaleOutputRect(&dstRect);
-		dstRect.w = line.m_surface->w;
-		dstRect.h = line.m_surface->h;
-		if (SDL_BlitSurface(line.m_surface.get(), nullptr, DiabloUiSurface(), &dstRect) < 0)
+		dstRect.w = line.mSurface->w;
+		dstRect.h = line.mSurface->h;
+		if (SDL_BlitSurface(line.mSurface.get(), nullptr, DiabloUiSurface(), &dstRect) < 0)
 			ErrSdl();
 	}
 	SDL_SetClipRect(DiabloUiSurface(), nullptr);
@@ -196,6 +199,9 @@ bool TextDialog()
 {
 	CreditsRenderer creditsRenderer;
 	bool endMenu = false;
+
+	if (IsHardwareCursor())
+		SetHardwareCursorVisible(false);
 
 	SDL_Event event;
 	do {
@@ -228,8 +234,8 @@ bool TextDialog()
 
 bool UiCreditsDialog()
 {
-	text = CREDITS_LINES;
-	textLines = CREDITS_LINES_SIZE;
+	Text = CreditLines;
+	textLines = CreditLinesSize;
 
 	LoadArt("ui_art\\creditsw.pcx", &ArtBackgroundWidescreen);
 	LoadBackgroundArt("ui_art\\credits.pcx");
@@ -239,8 +245,8 @@ bool UiCreditsDialog()
 
 bool UiSupportDialog()
 {
-	text = SUPPORT_LINES;
-	textLines = SUPPORT_LINES_SIZE;
+	Text = SupportLines;
+	textLines = SupportLinesSize;
 
 	if (gbIsHellfire) {
 		LoadArt("ui_art\\supportw.pcx", &ArtBackgroundWidescreen);

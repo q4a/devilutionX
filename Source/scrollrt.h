@@ -5,14 +5,13 @@
  */
 #pragma once
 
-#include <stdint.h>
+#include <cstdint>
 
 #include "engine.h"
-#include "miniwin/miniwin.h"
+#include "engine/animationinfo.h"
+#include "engine/point.hpp"
 
 namespace devilution {
-
-#define PANELS_COVER (gnScreenWidth <= PANEL_WIDTH && gnScreenHeight <= SPANEL_HEIGHT + PANEL_HEIGHT)
 
 enum _scroll_direction : uint8_t {
 	SDIR_NONE,
@@ -30,13 +29,21 @@ enum _scroll_direction : uint8_t {
 extern bool sgbControllerActive;
 extern bool IsMovingMouseCursorWithController();
 
-extern int light_table_index;
-extern DWORD level_cel_block;
+extern int LightTableIndex;
+extern uint32_t level_cel_block;
 extern char arch_draw_type;
-extern int cel_transparency_active;
-extern int cel_foliage_active;
+extern bool cel_transparency_active;
+extern bool cel_foliage_active;
 extern int level_piece_id;
 extern bool AutoMapShowItems;
+
+/**
+ * @brief Returns the offset for the walking animation
+ * @param animationInfo the current active walking animation
+ * @param dir walking direction
+ * @param cameraMode Adjusts the offset relative to the camera
+ */
+Displacement GetOffsetForWalking(const AnimationInfo &animationInfo, const Direction dir, bool cameraMode = false);
 
 void ClearCursor();
 void ShiftGrid(int *x, int *y, int horizontal, int vertical);
@@ -51,14 +58,14 @@ void CalcViewportGeometry();
  * @param StartX Center of view in dPiece coordinate
  * @param StartY Center of view in dPiece coordinate
  */
-void DrawView(const CelOutputBuffer &out, int StartX, int StartY);
+void DrawView(const Surface &out, int StartX, int StartY);
 
 void ClearScreenBuffer();
 #ifdef _DEBUG
 void ScrollView();
 #endif
 void EnableFrameCount();
-void scrollrt_draw_game_screen(bool draw_cursor);
+void scrollrt_draw_game_screen();
 void DrawAndBlit();
 
 } // namespace devilution

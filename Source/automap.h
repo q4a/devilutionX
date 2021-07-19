@@ -5,21 +5,22 @@
  */
 #pragma once
 
-#include <stdint.h>
+#include <cstdint>
 
 #include "engine.h"
+#include "engine/displacement.hpp"
+#include "engine/point.hpp"
 #include "gendung.h"
 
 namespace devilution {
 
 /** Specifies whether the automap is enabled. */
-extern bool automapflag;
+extern bool AutomapActive;
 /** Tracks the explored areas of the map. */
-extern bool automapview[DMAXX][DMAXY];
+extern bool AutomapView[DMAXX][DMAXY];
 /** Specifies the scale of the automap. */
 extern int AutoMapScale;
-extern int AutoMapXOfs;
-extern int AutoMapYOfs;
+extern Displacement AutomapOffset;
 extern int AmLine64;
 extern int AmLine32;
 extern int AmLine16;
@@ -74,12 +75,12 @@ void AutomapZoomOut();
 /**
  * @brief Renders the automap to the given buffer.
  */
-void DrawAutomap(const CelOutputBuffer &out);
+void DrawAutomap(const Surface &out);
 
 /**
  * @brief Marks the given coordinate as within view on the automap.
  */
-void SetAutomapView(int x, int y);
+void SetAutomapView(Point tile);
 
 /**
  * @brief Resets the zoom level of the automap.

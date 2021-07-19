@@ -5,21 +5,21 @@
  */
 #pragma once
 
-#include <SDL.h>
+#include <cstdint>
 
 namespace devilution {
 
 #define SHA1HashSize 20
 
 struct SHA1Context {
-	Uint32 state[5];
-	Uint32 count[2];
+	uint32_t state[5];
+	uint32_t count[2];
 	char buffer[64];
 };
 
 void SHA1Clear();
-void SHA1Result(int n, char Message_Digest[SHA1HashSize]);
-void SHA1Calculate(int n, const char *data, char Message_Digest[SHA1HashSize]);
+void SHA1Result(int n, char messageDigest[SHA1HashSize]);
+void SHA1Calculate(int n, const char *data, char messageDigest[SHA1HashSize]);
 void SHA1Reset(int n);
 
 } // namespace devilution

@@ -17,9 +17,9 @@ Download the latest [DevilutionX release](https://github.com/diasurgical/devilut
 <details><summary>Linux</summary>
 
 - Copy the MPQ files to the folder containing the DevilutionX executable, or to the data folder. The data folder path may differ depending on distro, version, and security settings, but will normally be `~/.local/share/diasurgical/devilution/`
-- Install [SDL2](https://www.libsdl.org/download-2.0.php), [SDL2_mixer](https://www.libsdl.org/projects/SDL_mixer/) and [SDL2_ttf](https://www.libsdl.org/projects/SDL_ttf/):
- - Ubuntu/Debian/Rasbian `sudo apt install libsdl2-2.0-0 libsdl2-ttf-2.0-0 libsdl2-mixer-2.0-0`
- - Fedora `sudo dnf install SDL2 SDL2_ttf SDL2_mixer`
+- Install [SDL2](https://www.libsdl.org/download-2.0.php) and [SDL2_ttf](https://www.libsdl.org/projects/SDL_ttf/):
+ - Ubuntu/Debian/Rasbian `sudo apt install libsdl2-2.0-0 libsdl2-ttf-2.0-0`
+ - Fedora `sudo dnf install SDL2 SDL2_ttf`
 - Run `./devilutionx`
 
 </details>
@@ -59,19 +59,30 @@ sudo apt install devilutionx
 
 </details>
 
+<details><summary>Android</summary>
+
+- Copy the APK file to device and tap on it on device's file explorer or install via `adb install` (if USB debugging is enabled on device).
+- Create a folder called `devilutionx` in the root of the phone's internal memory or SD card, and place the MPQ-files there.
+
+</details>
+
 <details><summary>New Nintendo 3DS</summary>
 
 ### .3dsx installation
 
 - Copy `devilutionx.3dsx` into `sd:/3ds/devilutionx/`.
-- Copy the MPQ files to `sd:/3ds/devilutionx/`.
+- Copy the MPQ files into `sd:/3ds/devilutionx/`.
+- Copy the `CharisSILB.ttf` font file into `sd:/3ds/devilutionx/`.
 - Launch `devilutionx.3dsx` with the [Homebrew Launcher](https://github.com/fincs/new-hbmenu).
- - *Note:* When the Hellfire .mpqs are installed you can still launch regular Diablo by passing `--diablo` to `devilutionx.3dsx`.
+    - *Note:* When the Hellfire .mpqs are installed you can still launch regular Diablo by passing `--diablo` to `devilutionx.3dsx`.
 
 ### .cia installation
 
-- Copy `devilutionx.cia` to your SD card and install with a title manager, e.g. [FBI](https://github.com/Steveice10/FBI). `devilutionx.cia` can be removed after being installed.
+- Copy `devilutionx.cia` to your SD card.
 - Copy the MPQ files to `sd:/3ds/devilutionx/`.
+- Copy the `CharisSILB.ttf` font file into `sd:/3ds/devilutionx/`.
+- Install `devilutionx.cia` with a title manager (e.g. [FBI](https://github.com/Steveice10/FBI)).
+    - `devilutionx.cia` can be removed after being installed.
 - Launch Diablo from your 3DS Homemenu.
 
 </details>
@@ -117,7 +128,7 @@ sudo apt install devilutionx
 
 - Copy [devilutionx-rg350.opk](https://github.com/diasurgical/devilutionX/releases/latest/download/devilutionx-rg350.opk) to `/media/sdcard/APPS/`.
 - Copy the MPQ files to `/media/home/.local/share/diasurgical/devilution/`
-- 
+-
  **NOTE:** You can copy the MPQ files to sdcard instead and create a symlink at the expected location. To do this, SSH into your RG350 and run:
 
  ~~~bash

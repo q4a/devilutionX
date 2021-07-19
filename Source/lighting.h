@@ -5,6 +5,10 @@
  */
 #pragma once
 
+#include <array>
+
+#include "engine.h"
+#include "engine/point.hpp"
 #include "miniwin/miniwin.h"
 
 namespace devilution {
@@ -14,61 +18,62 @@ namespace devilution {
 #define LIGHTSIZE (27 * 256)
 #define NO_LIGHT -1
 
-struct LightListStruct {
-	int _lx;
-	int _ly;
+struct LightPosition {
+	Point tile;
+	/** Pixel offset from tile. */
+	Point offset;
+	/** Prevous position. */
+	Point old;
+};
+
+struct LightStruct {
+	LightPosition position;
 	int _lradius;
 	int _lid;
 	bool _ldel;
 	bool _lunflag;
-	int _lunx;
-	int _luny;
-	int _lunr;
-	int _xoff;
-	int _yoff;
+	int oldRadius;
 	bool _lflags;
 };
 
-extern LightListStruct VisionList[MAXVISION];
-extern uint8_t lightactive[MAXLIGHTS];
-extern LightListStruct LightList[MAXLIGHTS];
-extern int numlights;
-extern int numvision;
-extern char lightmax;
-extern bool dolighting;
-extern int visionid;
-extern BYTE *pLightTbl;
-extern bool lightflag;
+extern LightStruct VisionList[MAXVISION];
+extern int VisionCount;
+extern int VisionId;
+extern LightStruct Lights[MAXLIGHTS];
+extern uint8_t ActiveLights[MAXLIGHTS];
+extern int ActiveLightCount;
+extern char LightsMax;
+extern std::array<uint8_t, LIGHTSIZE> LightTables;
+extern bool DisableLighting;
+extern bool UpdateLighting;
 
-void DoLighting(int nXPos, int nYPos, int nRadius, int Lnum);
-void DoUnVision(int nXPos, int nYPos, int nRadius);
-void DoVision(int nXPos, int nYPos, int nRadius, bool doautomap, bool visible);
-void FreeLightTable();
-void InitLightTable();
+void DoLighting(Point position, int nRadius, int Lnum);
+void DoUnVision(Point position, int nRadius);
+void DoVision(Point position, int nRadius, bool doautomap, bool visible);
 void MakeLightTable();
 #ifdef _DEBUG
 void ToggleLighting();
 #endif
 void InitLightMax();
 void InitLighting();
-int AddLight(int x, int y, int r);
+int AddLight(Point position, int r);
 void AddUnLight(int i);
 void ChangeLightRadius(int i, int r);
-void ChangeLightXY(int i, int x, int y);
-void ChangeLightOff(int i, int x, int y);
-void ChangeLight(int i, int x, int y, int r);
+void ChangeLightXY(int i, Point position);
+void ChangeLightOffset(int i, Point position);
+void ChangeLight(int i, Point position, int r);
 void ProcessLightList();
 void SavePreLighting();
 void InitVision();
-int AddVision(int x, int y, int r, bool mine);
+int AddVision(Point position, int r, bool mine);
 void ChangeVisionRadius(int id, int r);
-void ChangeVisionXY(int id, int x, int y);
+void ChangeVisionXY(int id, Point position);
 void ProcessVisionList();
 void lighting_color_cycling();
 
 /* rdata */
 
-extern const char CrawlTable[2749];
-extern const BYTE vCrawlTable[23][30];
+extern const int8_t CrawlTable[2749];
+extern const uint8_t VisionCrawlTable[23][30];
 
 } // namespace devilution

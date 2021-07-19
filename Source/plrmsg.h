@@ -5,13 +5,16 @@
  */
 #pragma once
 
+#include "SDL.h"
+#include <cstdint>
+
 #include "engine.h"
 
 namespace devilution {
 
 struct _plrmsg {
 	Uint32 time;
-	Uint8 player;
+	uint8_t player;
 	char str[144];
 };
 
@@ -21,6 +24,6 @@ size_t EventPlrMsg(const char *pszFmt, ...);
 void SendPlrMsg(int pnum, const char *pszStr);
 void ClearPlrMsg();
 void InitPlrMsg();
-void DrawPlrMsg(const CelOutputBuffer &out);
+void DrawPlrMsg(const Surface &out);
 
 } // namespace devilution

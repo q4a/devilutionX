@@ -18,9 +18,9 @@ class Joystick {
 	static std::vector<Joystick> *const joysticks_;
 
 public:
-	static void Add(int device_index);
-	static void Remove(SDL_JoystickID instance_id);
-	static Joystick *Get(SDL_JoystickID instance_id);
+	static void Add(int deviceIndex);
+	static void Remove(SDL_JoystickID instanceId);
+	static Joystick *Get(SDL_JoystickID instanceId);
 	static Joystick *Get(const SDL_Event &event);
 	static const std::vector<Joystick> &All();
 	static bool IsPressedOnAnyJoystick(ControllerButton button);
@@ -36,7 +36,8 @@ public:
 
 private:
 	static int ToSdlJoyButton(ControllerButton button);
-	static bool IsHatButtonPressed(ControllerButton button);
+
+	bool IsHatButtonPressed(ControllerButton button) const;
 
 	SDL_Joystick *sdl_joystick_ = NULL;
 	SDL_JoystickID instance_id_ = -1;

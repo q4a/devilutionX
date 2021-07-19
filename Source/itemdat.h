@@ -5,8 +5,7 @@
  */
 #pragma once
 
-#include <stdbool.h>
-#include <stdint.h>
+#include <cstdint>
 
 #include "objdat.h"
 #include "spelldat.h"
@@ -14,7 +13,7 @@
 namespace devilution {
 
 /** @todo add missing values and apply */
-enum _item_indexes : uint8_t {
+enum _item_indexes : int16_t {
 	IDI_GOLD,
 	IDI_WARRIOR,
 	IDI_WARRSHLD,
@@ -65,6 +64,7 @@ enum _item_indexes : uint8_t {
 	IDI_FULLNOTE,
 	IDI_BROWNSUIT,
 	IDI_GREYSUIT,
+	IDI_NONE = -1,
 };
 
 enum item_drop_rate : uint8_t {
@@ -352,6 +352,18 @@ enum item_special_effect {
 	// clang-format on
 };
 
+typedef enum item_special_effect_hf {
+	// clang-format off
+	ISPLHF_DEVASTATION  = 1 << 0,
+	ISPLHF_DECAY        = 1 << 1,
+	ISPLHF_PERIL        = 1 << 2,
+	ISPLHF_JESTERS      = 1 << 3,
+	ISPLHF_DOPPELGANGER = 1 << 4,
+	ISPLHF_ACDEMON      = 1 << 5,
+	ISPLHF_ACUNDEAD     = 1 << 6,
+	// clang-format on
+} item_special_effect_hf;
+
 enum item_misc_id : int8_t {
 	IMISC_NONE,
 	IMISC_USEFIRST,
@@ -420,21 +432,21 @@ struct ItemDataStruct {
 	enum unique_base_item iItemId;
 	const char *iName;
 	const char *iSName;
-	Uint8 iMinMLvl;
-	Uint8 iDurability;
-	Uint8 iMinDam;
-	Uint8 iMaxDam;
-	Uint8 iMinAC;
-	Uint8 iMaxAC;
-	Uint8 iMinStr;
-	Uint8 iMinMag;
-	Uint8 iMinDex;
-	Sint32 iFlags; // item_special_effect as bit flags
+	uint8_t iMinMLvl;
+	uint8_t iDurability;
+	uint8_t iMinDam;
+	uint8_t iMaxDam;
+	uint8_t iMinAC;
+	uint8_t iMaxAC;
+	uint8_t iMinStr;
+	uint8_t iMinMag;
+	uint8_t iMinDex;
+	uint32_t iFlags; // item_special_effect as bit flags
 	enum item_misc_id iMiscId;
 	enum spell_id iSpell;
 	bool iUsable;
-	Uint16 iValue;
-	Uint16 iMaxValue;
+	uint16_t iValue;
+	uint16_t iMaxValue;
 };
 
 enum item_effect_type : int8_t {
@@ -485,14 +497,14 @@ enum item_effect_type : int8_t {
 	IPL_INVCURS,
 	IPL_THORNS,
 	IPL_NOMANA,
-	IPL_NOHEALPLR,
-	IPL_0x30,     // Unknown
-	IPL_0x31,     // Unknown
-	IPL_FIREBALL, /* only used in hellfire */
-	IPL_0x33,     // Unknown
+	IPL_NOHEALPLR, // unused
+	IPL_0x30,      // Unknown
+	IPL_0x31,      // Unknown
+	IPL_FIREBALL,  /* only used in hellfire */
+	IPL_0x33,      // Unknown
 	IPL_ABSHALFTRAP,
 	IPL_KNOCKBACK,
-	IPL_NOHEALMON,
+	IPL_NOHEALMON, // unused
 	IPL_STEALMANA,
 	IPL_STEALLIFE,
 	IPL_TARGAC,
@@ -505,24 +517,24 @@ enum item_effect_type : int8_t {
 	IPL_SETDUR,
 	IPL_NOMINSTR,
 	IPL_SPELL,
-	IPL_FASTSWING,
+	IPL_FASTSWING, // unused
 	IPL_ONEHAND,
 	IPL_3XDAMVDEM,
 	IPL_ALLRESZERO,
 	IPL_0x47, // Unknown
 	IPL_DRAINLIFE,
 	IPL_RNDSTEALLIFE,
-	IPL_INFRAVISION,
+	IPL_INFRAVISION, // unused
 	IPL_SETAC,
 	IPL_ADDACLIFE,
 	IPL_ADDMANAAC,
-	IPL_FIRERESCLVL,
+	IPL_FIRERESCLVL, // unused
 	IPL_AC_CURSE,
 	IDI_LASTDIABLO = IPL_AC_CURSE,
 	IPL_FIRERES_CURSE,
 	IPL_LIGHTRES_CURSE,
 	IPL_MAGICRES_CURSE,
-	IPL_ALLRES_CURSE,
+	IPL_ALLRES_CURSE, // unused
 	IPL_DEVASTATION,
 	IPL_DECAY,
 	IPL_PERIL,
@@ -553,50 +565,37 @@ enum affix_item_type : uint8_t {
 	// clang-format on
 };
 
+struct ItemPower {
+	item_effect_type type;
+	int param1;
+	int param2;
+};
+
 struct PLStruct {
 	const char *PLName;
-	enum item_effect_type PLPower;
-	Sint32 PLParam1;
-	Sint32 PLParam2;
-	Sint8 PLMinLvl;
-	Sint32 PLIType; // affix_item_type as bit flags
+	ItemPower power;
+	int8_t PLMinLvl;
+	int PLIType; // affix_item_type as bit flags
 	enum goodorevil PLGOE;
 	bool PLDouble;
 	bool PLOk;
-	Sint32 PLMinVal;
-	Sint32 PLMaxVal;
-	Sint32 PLMultVal;
+	int minVal;
+	int maxVal;
+	int multVal;
 };
 
 struct UItemStruct {
 	const char *UIName;
 	enum unique_base_item UIItemId;
-	Sint8 UIMinLvl;
-	Sint8 UINumPL;
-	Sint32 UIValue;
-	enum item_effect_type UIPower1;
-	Sint32 UIParam1;
-	Sint32 UIParam2;
-	enum item_effect_type UIPower2;
-	Sint32 UIParam3;
-	Sint32 UIParam4;
-	enum item_effect_type UIPower3;
-	Sint32 UIParam5;
-	Sint32 UIParam6;
-	enum item_effect_type UIPower4;
-	Sint32 UIParam7;
-	Sint32 UIParam8;
-	enum item_effect_type UIPower5;
-	Sint32 UIParam9;
-	Sint32 UIParam10;
-	enum item_effect_type UIPower6;
-	Sint32 UIParam11;
-	Sint32 UIParam12;
+	int8_t UIMinLvl;
+	uint8_t UINumPL;
+	int UIValue;
+	ItemPower powers[6];
 };
 
 extern ItemDataStruct AllItemsList[];
-extern const PLStruct PL_Prefix[];
-extern const PLStruct PL_Suffix[];
+extern const PLStruct ItemPrefixes[];
+extern const PLStruct ItemSuffixes[];
 extern const UItemStruct UniqueItemList[];
 
 } // namespace devilution

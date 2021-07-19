@@ -12,85 +12,85 @@
 
 namespace devilution {
 
-DeadStruct dead[MAXDEAD];
+DeadStruct Dead[MaxDead];
 int8_t stonendx;
+
+namespace {
+void InitDeadAnimationFromMonster(DeadStruct &dead, const CMonster &mon)
+{
+	int i = 0;
+	const auto &animData = mon.GetAnimData(MonsterGraphic::Death);
+	for (const auto &celSprite : animData.CelSpritesForDirections)
+		dead.data[i++] = celSprite->Data();
+	dead.frame = animData.Frames;
+	dead.width = animData.CelSpritesForDirections[0]->Width();
+}
+} // namespace
 
 void InitDead()
 {
-	int8_t mtypes[MAXMONSTERS];
-
-	for (int8_t &mtype : mtypes)
-		mtype = 0;
+	int8_t mtypes[MAXMONSTERS] = {};
 
 	int8_t nd = 0;
 
-	for (int i = 0; i < nummtypes; i++) {
-		if (mtypes[Monsters[i].mtype] == 0) {
-			for (int d = 0; d < 8; d++)
-				dead[nd]._deadData[d] = Monsters[i].Anims[MA_DEATH].Data[d];
-			dead[nd]._deadFrame = Monsters[i].Anims[MA_DEATH].Frames;
-			dead[nd]._deadWidth = Monsters[i].width;
-			dead[nd]._deadWidth2 = Monsters[i].width2;
-			dead[nd]._deadtrans = 0;
-			nd++;
+	for (int i = 0; i < LevelMonsterTypeCount; i++) {
+		if (mtypes[LevelMonsterTypes[i].mtype] != 0)
+			continue;
 
-			Monsters[i].mdeadval = nd;
-			mtypes[Monsters[i].mtype] = nd;
-		}
+		InitDeadAnimationFromMonster(Dead[nd], LevelMonsterTypes[i]);
+		Dead[nd].translationPaletteIndex = 0;
+		nd++;
+
+		LevelMonsterTypes[i].mdeadval = nd;
+		mtypes[LevelMonsterTypes[i].mtype] = nd;
 	}
 
-	for (auto &d : dead[nd]._deadData)
-		d = misfiledata[MFILE_BLODBUR].mAnimData[0];
-	dead[nd]._deadFrame = 8;
-	dead[nd]._deadWidth = 128;
-	dead[nd]._deadWidth2 = 32;
-	dead[nd]._deadtrans = 0;
+	for (auto &dead : Dead[nd].data)
+		dead = MissileSpriteData[MFILE_BLODBUR].mAnimData[0];
+	Dead[nd].frame = 8;
+	Dead[nd].width = 128;
+	Dead[nd].translationPaletteIndex = 0;
 	nd++;
 
-	for (auto &d : dead[nd]._deadData)
-		d = misfiledata[MFILE_SHATTER1].mAnimData[0];
+	for (auto &dead : Dead[nd].data)
+		dead = MissileSpriteData[MFILE_SHATTER1].mAnimData[0];
 
-	dead[nd]._deadFrame = 12;
-	dead[nd]._deadWidth = 128;
-	dead[nd]._deadWidth2 = 32;
-	dead[nd]._deadtrans = 0;
+	Dead[nd].frame = 12;
+	Dead[nd].width = 128;
+	Dead[nd].translationPaletteIndex = 0;
 	nd++;
 
 	stonendx = nd;
 
-	for (int i = 0; i < nummonsters; i++) {
-		int mi = monstactive[i];
-		if (monster[mi]._uniqtype != 0) {
-			for (int d = 0; d < 8; d++)
-				dead[nd]._deadData[d] = monster[mi].MType->Anims[MA_DEATH].Data[d];
-			dead[nd]._deadFrame = monster[mi].MType->Anims[MA_DEATH].Frames;
-			dead[nd]._deadWidth = monster[mi].MType->width;
-			dead[nd]._deadWidth2 = monster[mi].MType->width2;
-			dead[nd]._deadtrans = monster[mi]._uniqtrans + 4;
+	for (int i = 0; i < ActiveMonsterCount; i++) {
+		auto &monster = Monsters[ActiveMonsters[i]];
+		if (monster._uniqtype != 0) {
+			InitDeadAnimationFromMonster(Dead[nd], *monster.MType);
+			Dead[nd].translationPaletteIndex = monster._uniqtrans + 4;
 			nd++;
 
-			monster[mi]._udeadval = nd;
+			monster._udeadval = nd;
 		}
 	}
 
-	assert(nd <= MAXDEAD);
+	assert(static_cast<unsigned>(nd) <= MaxDead);
 }
 
-void AddDead(int dx, int dy, int8_t dv, direction ddir)
+void AddDead(Point tilePosition, int8_t dv, Direction ddir)
 {
-	dDead[dx][dy] = (dv & 0x1F) + (ddir << 5);
+	dDead[tilePosition.x][tilePosition.y] = (dv & 0x1F) + (ddir << 5);
 }
 
 void SetDead()
 {
-	for (int i = 0; i < nummonsters; i++) {
-		int mi = monstactive[i];
-		if (monster[mi]._uniqtype != 0) {
-			for (int dx = 0; dx < MAXDUNX; dx++) {
-				for (int dy = 0; dy < MAXDUNY; dy++) {
-					if ((dDead[dx][dy] & 0x1F) == monster[mi]._udeadval)
-						ChangeLightXY(monster[mi].mlid, dx, dy);
-				}
+	for (int i = 0; i < ActiveMonsterCount; i++) {
+		auto &monster = Monsters[ActiveMonsters[i]];
+		if (monster._uniqtype == 0)
+			continue;
+		for (int dx = 0; dx < MAXDUNX; dx++) {
+			for (int dy = 0; dy < MAXDUNY; dy++) {
+				if ((dDead[dx][dy] & 0x1F) == monster._udeadval)
+					ChangeLightXY(monster.mlid, { dx, dy });
 			}
 		}
 	}

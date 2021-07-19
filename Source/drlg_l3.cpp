@@ -6,7 +6,9 @@
 
 #include <algorithm>
 
-#include "drlg_l1.h"
+#include "engine/load_file.hpp"
+#include "engine/random.hpp"
+#include "gendung.h"
 #include "lighting.h"
 #include "monster.h"
 #include "objdat.h"
@@ -19,7 +21,7 @@ namespace devilution {
 namespace {
 
 /** This will be true if a lava pool has been generated for the level */
-Uint8 lavapool;
+uint8_t lavapool;
 int lockoutcnt;
 bool lockout[DMAXX][DMAXY];
 
@@ -534,15 +536,15 @@ const BYTE L3ANVIL[] = {
 	0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 0,
 	// clang-format on
 };
-const BYTE byte_48A76C[] = { 1, 1, 8, 25 };
-const BYTE byte_48A770[] = { 1, 1, 8, 26 };
-const BYTE byte_48A774[] = { 1, 1, 8, 27 };
-const BYTE byte_48A778[] = { 1, 1, 8, 28 };
-const BYTE byte_48A77C[] = { 1, 1, 7, 29 };
-const BYTE byte_48A780[] = { 1, 1, 7, 30 };
-const BYTE byte_48A784[] = { 1, 1, 7, 31 };
-const BYTE byte_48A788[] = { 1, 1, 7, 32 };
-const BYTE byte_48A790[] = {
+const BYTE HivePattern1[] = { 1, 1, 8, 25 };
+const BYTE HivePattern2[] = { 1, 1, 8, 26 };
+const BYTE HivePattern3[] = { 1, 1, 8, 27 };
+const BYTE HivePattern4[] = { 1, 1, 8, 28 };
+const BYTE HivePattern5[] = { 1, 1, 7, 29 };
+const BYTE HivePattern6[] = { 1, 1, 7, 30 };
+const BYTE HivePattern7[] = { 1, 1, 7, 31 };
+const BYTE HivePattern8[] = { 1, 1, 7, 32 };
+const BYTE HivePattern9[] = {
 	// clang-format off
 	3, 3, // width, height
 
@@ -555,7 +557,7 @@ const BYTE byte_48A790[] = {
 	0,   0, 0,
 	// clang-format on
 };
-const BYTE byte_48A7A8[] = {
+const BYTE HivePattern10[] = {
 	// clang-format off
 	3, 3, // width, height
 
@@ -568,25 +570,25 @@ const BYTE byte_48A7A8[] = {
 	0,   0, 0,
 	// clang-format on
 };
-const BYTE byte_48A7BC[] = { 1, 1, 9, 33 };
-const BYTE byte_48A7C0[] = { 1, 1, 9, 34 };
-const BYTE byte_48A7C4[] = { 1, 1, 9, 35 };
-const BYTE byte_48A7C8[] = { 1, 1, 9, 36 };
-const BYTE byte_48A7CC[] = { 1, 1, 9, 37 };
-const BYTE byte_48A7D0[] = { 1, 1, 11, 38 };
-const BYTE byte_48A7D4[] = { 1, 1, 10, 39 };
-const BYTE byte_48A7D8[] = { 1, 1, 10, 40 };
-const BYTE byte_48A7DC[] = { 1, 1, 10, 41 };
-const BYTE byte_48A7E0[] = { 1, 1, 10, 42 };
-const BYTE byte_48A7E4[] = { 1, 1, 10, 43 };
-const BYTE byte_48A7E8[] = { 1, 1, 11, 44 };
-const BYTE byte_48A7EC[] = { 1, 1, 9, 45 };
-const BYTE byte_48A7F0[] = { 1, 1, 9, 46 };
-const BYTE byte_48A7F4[] = { 1, 1, 10, 47 };
-const BYTE byte_48A7F8[] = { 1, 1, 10, 48 };
-const BYTE byte_48A7FC[] = { 1, 1, 11, 49 };
-const BYTE byte_48A800[] = { 1, 1, 11, 50 };
-const BYTE byte_48A808[] = {
+const BYTE HivePattern11[] = { 1, 1, 9, 33 };
+const BYTE HivePattern12[] = { 1, 1, 9, 34 };
+const BYTE HivePattern13[] = { 1, 1, 9, 35 };
+const BYTE HivePattern14[] = { 1, 1, 9, 36 };
+const BYTE HivePattern15[] = { 1, 1, 9, 37 };
+const BYTE HivePattern16[] = { 1, 1, 11, 38 };
+const BYTE HivePattern17[] = { 1, 1, 10, 39 };
+const BYTE HivePattern18[] = { 1, 1, 10, 40 };
+const BYTE HivePattern19[] = { 1, 1, 10, 41 };
+const BYTE HivePattern20[] = { 1, 1, 10, 42 };
+const BYTE HivePattern21[] = { 1, 1, 10, 43 };
+const BYTE HivePattern22[] = { 1, 1, 11, 44 };
+const BYTE HivePattern23[] = { 1, 1, 9, 45 };
+const BYTE HivePattern24[] = { 1, 1, 9, 46 };
+const BYTE HivePattern25[] = { 1, 1, 10, 47 };
+const BYTE HivePattern26[] = { 1, 1, 10, 48 };
+const BYTE HivePattern27[] = { 1, 1, 11, 49 };
+const BYTE HivePattern28[] = { 1, 1, 11, 50 };
+const BYTE HivePattern29[] = {
 	// clang-format off
 	3, 3, // width, height
 
@@ -599,7 +601,7 @@ const BYTE byte_48A808[] = {
 	 0,  0, 0,
 	// clang-format on
 };
-const BYTE byte_48A820[] = {
+const BYTE HivePattern30[] = {
 	// clang-format off
 	3, 3, // width, height
 
@@ -612,7 +614,7 @@ const BYTE byte_48A820[] = {
 	 0,  0, 0,
 	// clang-format on
 };
-const BYTE byte_48A838[] = {
+const BYTE HivePattern31[] = {
 	// clang-format off
 	3, 3, // width, height
 
@@ -625,7 +627,7 @@ const BYTE byte_48A838[] = {
 	 0,  0, 0,
 	// clang-format on
 };
-const BYTE byte_48A850[] = {
+const BYTE HivePattern32[] = {
 	// clang-format off
 	3, 3, // width, height
 
@@ -638,7 +640,7 @@ const BYTE byte_48A850[] = {
 	 0,  0, 0,
 	// clang-format on
 };
-const BYTE byte_48A868[] = {
+const BYTE HivePattern33[] = {
 	// clang-format off
 	3, 3, // width, height
 
@@ -651,7 +653,7 @@ const BYTE byte_48A868[] = {
 	 0,  0, 0,
 	// clang-format on
 };
-const BYTE byte_48A880[] = {
+const BYTE HivePattern34[] = {
 	// clang-format off
 	3, 3, // width, height
 
@@ -664,7 +666,7 @@ const BYTE byte_48A880[] = {
 	 0,  0, 0,
 	// clang-format on
 };
-const BYTE byte_48A898[] = {
+const BYTE HivePattern35[] = {
 	// clang-format off
 	3, 3, // width, height
 
@@ -677,7 +679,7 @@ const BYTE byte_48A898[] = {
 	 0,  0, 0,
 	// clang-format on
 };
-const BYTE byte_48A8B0[] = {
+const BYTE HivePattern36[] = {
 	// clang-format off
 	3, 3, // width, height
 
@@ -690,7 +692,7 @@ const BYTE byte_48A8B0[] = {
 	 0,  0, 0,
 	// clang-format on
 };
-const BYTE byte_48A8C8[] = {
+const BYTE HivePattern37[] = {
 	// clang-format off
 	3, 3, // width, height
 
@@ -703,7 +705,7 @@ const BYTE byte_48A8C8[] = {
 	 0,  0, 0,
 	// clang-format on
 };
-const BYTE byte_48A8E0[] = {
+const BYTE HivePattern38[] = {
 	// clang-format off
 	3, 3, // width, height
 
@@ -775,7 +777,7 @@ const BYTE L6ISLE5[] = {
 	7, 7,
 	// clang-format on
 };
-const BYTE byte_48A948[] = {
+const BYTE HivePattern39[] = {
 	// clang-format off
 	4, 4, // width, height
 
@@ -790,7 +792,7 @@ const BYTE byte_48A948[] = {
 	7,   7,   7, 7,
 	// clang-format on
 };
-const BYTE byte_48A970[] = {
+const BYTE HivePattern40[] = {
 	// clang-format off
 	4, 4, // width, height
 
@@ -805,7 +807,7 @@ const BYTE byte_48A970[] = {
 	7,   7,   7, 7,
 	// clang-format on
 };
-const BYTE byte_48A998[] = {
+const BYTE HivePattern41[] = {
 	// clang-format off
 	4, 5, // width, height
 
@@ -822,7 +824,7 @@ const BYTE byte_48A998[] = {
 	7,   7,   7, 7,
 	// clang-format on
 };
-const BYTE byte_48A9C8[] = {
+const BYTE HivePattern42[] = {
 	// clang-format off
 	4, 5, // width, height
 
@@ -840,33 +842,27 @@ const BYTE byte_48A9C8[] = {
 	// clang-format on
 };
 
-} // namespace
-
-static void InitL3Dungeon()
+void InitDungeonFlags()
 {
-	int i, j;
-
 	memset(dungeon, 0, sizeof(dungeon));
 
-	for (j = 0; j < DMAXY; j++) {
-		for (i = 0; i < DMAXX; i++) {
+	for (int j = 0; j < DMAXY; j++) {
+		for (int i = 0; i < DMAXX; i++) {
 			dungeon[i][j] = 0;
 			dflags[i][j] = 0;
 		}
 	}
 }
 
-static bool DRLG_L3FillRoom(int x1, int y1, int x2, int y2)
+bool FillRoom(int x1, int y1, int x2, int y2)
 {
-	int i, j, v;
-
 	if (x1 <= 1 || x2 >= 34 || y1 <= 1 || y2 >= 38) {
 		return false;
 	}
 
-	v = 0;
-	for (j = y1; j <= y2; j++) {
-		for (i = x1; i <= x2; i++) {
+	int v = 0;
+	for (int j = y1; j <= y2; j++) {
+		for (int i = x1; i <= x2; i++) {
 			v += dungeon[i][j];
 		}
 	}
@@ -875,12 +871,12 @@ static bool DRLG_L3FillRoom(int x1, int y1, int x2, int y2)
 		return false;
 	}
 
-	for (j = y1 + 1; j < y2; j++) {
-		for (i = x1 + 1; i < x2; i++) {
+	for (int j = y1 + 1; j < y2; j++) {
+		for (int i = x1 + 1; i < x2; i++) {
 			dungeon[i][j] = 1;
 		}
 	}
-	for (j = y1; j <= y2; j++) {
+	for (int j = y1; j <= y2; j++) {
 		if (GenerateRnd(2) != 0) {
 			dungeon[x1][j] = 1;
 		}
@@ -888,7 +884,7 @@ static bool DRLG_L3FillRoom(int x1, int y1, int x2, int y2)
 			dungeon[x2][j] = 1;
 		}
 	}
-	for (i = x1; i <= x2; i++) {
+	for (int i = x1; i <= x2; i++) {
 		if (GenerateRnd(2) != 0) {
 			dungeon[i][y1] = 1;
 		}
@@ -900,45 +896,19 @@ static bool DRLG_L3FillRoom(int x1, int y1, int x2, int y2)
 	return true;
 }
 
-static void DRLG_L3CreateBlock(int x, int y, int obs, int dir)
+void CreateBlock(int x, int y, int obs, int dir)
 {
-	int blksizex, blksizey, x1, y1, x2, y2;
-	int contflag;
+	int x1;
+	int y1;
+	int x2;
+	int y2;
 
-	blksizex = GenerateRnd(2) + 3;
-	blksizey = GenerateRnd(2) + 3;
+	int blksizex = GenerateRnd(2) + 3;
+	int blksizey = GenerateRnd(2) + 3;
 
 	if (dir == 0) {
 		y2 = y - 1;
 		y1 = y2 - blksizey;
-		if (blksizex < obs) {
-			x1 = GenerateRnd(blksizex) + x;
-		}
-		if (blksizex == obs) {
-			x1 = x;
-		}
-		if (blksizex > obs) {
-			x1 = x - GenerateRnd(blksizex);
-		}
-		x2 = blksizex + x1;
-	}
-	if (dir == 3) {
-		x2 = x - 1;
-		x1 = x2 - blksizex;
-		if (blksizey < obs) {
-			y1 = GenerateRnd(blksizey) + y;
-		}
-		if (blksizey == obs) {
-			y1 = y;
-		}
-		if (blksizey > obs) {
-			y1 = y - GenerateRnd(blksizey);
-		}
-		y2 = y1 + blksizey;
-	}
-	if (dir == 2) {
-		y1 = y + 1;
-		y2 = y1 + blksizey;
 		if (blksizex < obs) {
 			x1 = GenerateRnd(blksizex) + x;
 		}
@@ -964,42 +934,66 @@ static void DRLG_L3CreateBlock(int x, int y, int obs, int dir)
 		}
 		y2 = y1 + blksizey;
 	}
+	if (dir == 2) {
+		y1 = y + 1;
+		y2 = y1 + blksizey;
+		if (blksizex < obs) {
+			x1 = GenerateRnd(blksizex) + x;
+		}
+		if (blksizex == obs) {
+			x1 = x;
+		}
+		if (blksizex > obs) {
+			x1 = x - GenerateRnd(blksizex);
+		}
+		x2 = blksizex + x1;
+	}
+	if (dir == 3) {
+		x2 = x - 1;
+		x1 = x2 - blksizex;
+		if (blksizey < obs) {
+			y1 = GenerateRnd(blksizey) + y;
+		}
+		if (blksizey == obs) {
+			y1 = y;
+		}
+		if (blksizey > obs) {
+			y1 = y - GenerateRnd(blksizey);
+		}
+		y2 = y1 + blksizey;
+	}
 
-	if (DRLG_L3FillRoom(x1, y1, x2, y2)) {
-		contflag = GenerateRnd(4);
+	if (FillRoom(x1, y1, x2, y2)) {
+		int contflag = GenerateRnd(4);
 		if (contflag != 0 && dir != 2) {
-			DRLG_L3CreateBlock(x1, y1, blksizey, 0);
+			CreateBlock(x1, y1, blksizey, 0);
 		}
 		if (contflag != 0 && dir != 3) {
-			DRLG_L3CreateBlock(x2, y1, blksizex, 1);
+			CreateBlock(x2, y1, blksizex, 1);
 		}
 		if (contflag != 0 && dir != 0) {
-			DRLG_L3CreateBlock(x1, y2, blksizey, 2);
+			CreateBlock(x1, y2, blksizey, 2);
 		}
 		if (contflag != 0 && dir != 1) {
-			DRLG_L3CreateBlock(x1, y1, blksizex, 3);
+			CreateBlock(x1, y1, blksizex, 3);
 		}
 	}
 }
 
-static void DRLG_L3FloorArea(int x1, int y1, int x2, int y2)
+void FloorArea(int x1, int y1, int x2, int y2)
 {
-	int i, j;
-
-	for (j = y1; j <= y2; j++) {
-		for (i = x1; i <= x2; i++) {
+	for (int j = y1; j <= y2; j++) {
+		for (int i = x1; i <= x2; i++) {
 			dungeon[i][j] = 1;
 		}
 	}
 }
 
-static void DRLG_L3FillDiags()
+void FillDiagonals()
 {
-	int i, j, v;
-
-	for (j = 0; j < DMAXY - 1; j++) {
-		for (i = 0; i < DMAXX - 1; i++) {
-			v = dungeon[i + 1][j + 1] + 2 * dungeon[i][j + 1] + 4 * dungeon[i + 1][j] + 8 * dungeon[i][j];
+	for (int j = 0; j < DMAXY - 1; j++) {
+		for (int i = 0; i < DMAXX - 1; i++) {
+			int v = dungeon[i + 1][j + 1] + 2 * dungeon[i][j + 1] + 4 * dungeon[i + 1][j] + 8 * dungeon[i][j];
 			if (v == 6) {
 				if (GenerateRnd(2) == 0) {
 					dungeon[i][j] = 1;
@@ -1018,12 +1012,10 @@ static void DRLG_L3FillDiags()
 	}
 }
 
-static void DRLG_L3FillSingles()
+void FillSingles()
 {
-	int i, j;
-
-	for (j = 1; j < DMAXY - 1; j++) {
-		for (i = 1; i < DMAXX - 1; i++) {
+	for (int j = 1; j < DMAXY - 1; j++) {
+		for (int i = 1; i < DMAXX - 1; i++) {
 			if (dungeon[i][j] == 0
 			    && dungeon[i][j - 1] + dungeon[i - 1][j - 1] + dungeon[i + 1][j - 1] == 3
 			    && dungeon[i + 1][j] + dungeon[i - 1][j] == 2
@@ -1034,13 +1026,14 @@ static void DRLG_L3FillSingles()
 	}
 }
 
-static void DRLG_L3FillStraights()
+void FillStraights()
 {
-	int i, j, xc, xs, yc, ys, k, rv;
+	int xc;
+	int yc;
 
-	for (j = 0; j < DMAXY - 1; j++) {
-		xs = 0;
-		for (i = 0; i < 37; i++) {
+	for (int j = 0; j < DMAXY - 1; j++) {
+		int xs = 0;
+		for (int i = 0; i < 37; i++) {
 			if (dungeon[i][j] == 0 && dungeon[i][j + 1] == 1) {
 				if (xs == 0) {
 					xc = i;
@@ -1048,8 +1041,8 @@ static void DRLG_L3FillStraights()
 				xs++;
 			} else {
 				if (xs > 3 && GenerateRnd(2) != 0) {
-					for (k = xc; k < i; k++) {
-						rv = GenerateRnd(2);
+					for (int k = xc; k < i; k++) {
+						int rv = GenerateRnd(2);
 						dungeon[k][j] = rv;
 					}
 				}
@@ -1057,9 +1050,9 @@ static void DRLG_L3FillStraights()
 			}
 		}
 	}
-	for (j = 0; j < DMAXY - 1; j++) {
-		xs = 0;
-		for (i = 0; i < 37; i++) {
+	for (int j = 0; j < DMAXY - 1; j++) {
+		int xs = 0;
+		for (int i = 0; i < 37; i++) {
 			if (dungeon[i][j] == 1 && dungeon[i][j + 1] == 0) {
 				if (xs == 0) {
 					xc = i;
@@ -1067,8 +1060,8 @@ static void DRLG_L3FillStraights()
 				xs++;
 			} else {
 				if (xs > 3 && GenerateRnd(2) != 0) {
-					for (k = xc; k < i; k++) {
-						rv = GenerateRnd(2);
+					for (int k = xc; k < i; k++) {
+						int rv = GenerateRnd(2);
 						dungeon[k][j + 1] = rv;
 					}
 				}
@@ -1076,9 +1069,9 @@ static void DRLG_L3FillStraights()
 			}
 		}
 	}
-	for (i = 0; i < DMAXX - 1; i++) {
-		ys = 0;
-		for (j = 0; j < 37; j++) {
+	for (int i = 0; i < DMAXX - 1; i++) {
+		int ys = 0;
+		for (int j = 0; j < 37; j++) {
 			if (dungeon[i][j] == 0 && dungeon[i + 1][j] == 1) {
 				if (ys == 0) {
 					yc = j;
@@ -1086,8 +1079,8 @@ static void DRLG_L3FillStraights()
 				ys++;
 			} else {
 				if (ys > 3 && GenerateRnd(2) != 0) {
-					for (k = yc; k < j; k++) {
-						rv = GenerateRnd(2);
+					for (int k = yc; k < j; k++) {
+						int rv = GenerateRnd(2);
 						dungeon[i][k] = rv;
 					}
 				}
@@ -1095,9 +1088,9 @@ static void DRLG_L3FillStraights()
 			}
 		}
 	}
-	for (i = 0; i < DMAXX - 1; i++) {
-		ys = 0;
-		for (j = 0; j < 37; j++) {
+	for (int i = 0; i < DMAXX - 1; i++) {
+		int ys = 0;
+		for (int j = 0; j < 37; j++) {
 			if (dungeon[i][j] == 1 && dungeon[i + 1][j] == 0) {
 				if (ys == 0) {
 					yc = j;
@@ -1105,8 +1098,8 @@ static void DRLG_L3FillStraights()
 				ys++;
 			} else {
 				if (ys > 3 && GenerateRnd(2) != 0) {
-					for (k = yc; k < j; k++) {
-						rv = GenerateRnd(2);
+					for (int k = yc; k < j; k++) {
+						int rv = GenerateRnd(2);
 						dungeon[i + 1][k] = rv;
 					}
 				}
@@ -1116,26 +1109,22 @@ static void DRLG_L3FillStraights()
 	}
 }
 
-static void DRLG_L3Edges()
+void Edges()
 {
-	int i, j;
-
-	for (j = 0; j < DMAXY; j++) {
+	for (int j = 0; j < DMAXY; j++) {
 		dungeon[DMAXX - 1][j] = 0;
 	}
-	for (i = 0; i < DMAXX; i++) {
+	for (int i = 0; i < DMAXX; i++) { // NOLINT(modernize-loop-convert)
 		dungeon[i][DMAXY - 1] = 0;
 	}
 }
 
-static int DRLG_L3GetFloorArea()
+int GetFloorArea()
 {
-	int i, j, gfa;
+	int gfa = 0;
 
-	gfa = 0;
-
-	for (j = 0; j < DMAXY; j++) {
-		for (i = 0; i < DMAXX; i++) {
+	for (int j = 0; j < DMAXY; j++) {
+		for (int i = 0; i < DMAXX; i++) { // NOLINT(modernize-loop-convert)
 			gfa += dungeon[i][j];
 		}
 	}
@@ -1143,15 +1132,13 @@ static int DRLG_L3GetFloorArea()
 	return gfa;
 }
 
-static void DRLG_L3MakeMegas()
+void MakeMegas()
 {
-	int i, j, v, rv;
-
-	for (j = 0; j < DMAXY - 1; j++) {
-		for (i = 0; i < DMAXX - 1; i++) {
-			v = dungeon[i + 1][j + 1] + 2 * dungeon[i][j + 1] + 4 * dungeon[i + 1][j] + 8 * dungeon[i][j];
+	for (int j = 0; j < DMAXY - 1; j++) {
+		for (int i = 0; i < DMAXX - 1; i++) {
+			int v = dungeon[i + 1][j + 1] + 2 * dungeon[i][j + 1] + 4 * dungeon[i + 1][j] + 8 * dungeon[i][j];
 			if (v == 6) {
-				rv = GenerateRnd(2);
+				int rv = GenerateRnd(2);
 				if (rv == 0) {
 					v = 12;
 				} else {
@@ -1159,7 +1146,7 @@ static void DRLG_L3MakeMegas()
 				}
 			}
 			if (v == 9) {
-				rv = GenerateRnd(2);
+				int rv = GenerateRnd(2);
 				if (rv == 0) {
 					v = 13;
 				} else {
@@ -1170,31 +1157,30 @@ static void DRLG_L3MakeMegas()
 		}
 		dungeon[DMAXX - 1][j] = 8;
 	}
-	for (i = 0; i < DMAXX; i++) {
+	for (int i = 0; i < DMAXX; i++) { // NOLINT(modernize-loop-convert)
 		dungeon[i][DMAXY - 1] = 8;
 	}
 }
 
-static void DRLG_L3River()
+void River()
 {
-	int rx, ry, px, py, dir, nodir, nodir2, dircheck;
+	int dir;
+	int nodir;
 	int river[3][100];
 	int riveramt;
-	int i, found, bridge, lpcnt;
 
 	int rivercnt = 0;
-	bool bail = false;
 	int trys = 0;
 	/// BUGFIX: pdir is uninitialized, add code `pdir = -1;`(fixed)
 	int pdir = -1;
 
 	while (trys < 200 && rivercnt < 4) {
-		bail = false;
+		bool bail = false;
 		while (!bail && trys < 200) {
 			trys++;
-			rx = 0;
-			ry = 0;
-			i = 0;
+			int rx = 0;
+			int ry = 0;
+			int i = 0;
 			// BUGFIX: Replace with `(ry >= DMAXY || dungeon[rx][ry] < 25 || dungeon[rx][ry] > 28) && i < 100` (fixed)
 			while ((ry >= DMAXY || dungeon[rx][ry] < 25 || dungeon[rx][ry] > 28) && i < 100) {
 				rx = GenerateRnd(DMAXX);
@@ -1240,11 +1226,11 @@ static void DRLG_L3River()
 			river[0][0] = rx;
 			river[1][0] = ry;
 			riveramt = 1;
-			nodir2 = 4;
-			dircheck = 0;
+			int nodir2 = 4;
+			int dircheck = 0;
 			while (dircheck < 4 && riveramt < 100) {
-				px = rx;
-				py = ry;
+				int px = rx;
+				int py = ry;
 				if (dircheck == 0) {
 					dir = GenerateRnd(4);
 				} else {
@@ -1381,8 +1367,9 @@ static void DRLG_L3River()
 			bail = false;
 		}
 		if (bail) {
-			found = 0;
-			lpcnt = 0;
+			int found = 0;
+			int lpcnt = 0;
+			int bridge;
 			while (found == 0 && lpcnt < 30) {
 				lpcnt++;
 				bridge = GenerateRnd(riveramt);
@@ -1396,7 +1383,7 @@ static void DRLG_L3River()
 				    && dungeon[river[0][bridge] + 1][river[1][bridge]] == 7) {
 					found = 2;
 				}
-				for (i = 0; i < riveramt && found != 0; i++) {
+				for (int i = 0; i < riveramt && found != 0; i++) {
 					if (found == 1
 					    && (river[1][bridge] - 1 == river[1][i] || river[1][bridge] + 1 == river[1][i])
 					    && river[0][bridge] == river[0][i]) {
@@ -1426,9 +1413,9 @@ static void DRLG_L3River()
 	}
 }
 
-static bool DRLG_L3Spawn(int x, int y, int *totarea);
+bool Spawn(int x, int y, int *totarea);
 
-static bool DRLG_L3SpawnEdge(int x, int y, int *totarea)
+bool SpawnEdge(int x, int y, int *totarea)
 {
 	BYTE i;
 	static BYTE spawntable[15] = { 0x00, 0x0A, 0x43, 0x05, 0x2c, 0x06, 0x09, 0x00, 0x00, 0x1c, 0x83, 0x06, 0x09, 0x0A, 0x05 };
@@ -1439,7 +1426,7 @@ static bool DRLG_L3SpawnEdge(int x, int y, int *totarea)
 	if (x < 0 || y < 0 || x >= DMAXX || y >= DMAXY) {
 		return true;
 	}
-	if (dungeon[x][y] & 0x80) {
+	if ((dungeon[x][y] & 0x80) != 0) {
 		return false;
 	}
 	if (dungeon[x][y] > 15) {
@@ -1450,35 +1437,35 @@ static bool DRLG_L3SpawnEdge(int x, int y, int *totarea)
 	dungeon[x][y] |= 0x80;
 	*totarea += 1;
 
-	if (spawntable[i] & 8 && DRLG_L3SpawnEdge(x, y - 1, totarea)) {
+	if ((spawntable[i] & 8) != 0 && SpawnEdge(x, y - 1, totarea)) {
 		return true;
 	}
-	if (spawntable[i] & 4 && DRLG_L3SpawnEdge(x, y + 1, totarea)) {
+	if ((spawntable[i] & 4) != 0 && SpawnEdge(x, y + 1, totarea)) {
 		return true;
 	}
-	if (spawntable[i] & 2 && DRLG_L3SpawnEdge(x + 1, y, totarea)) {
+	if ((spawntable[i] & 2) != 0 && SpawnEdge(x + 1, y, totarea)) {
 		return true;
 	}
-	if (spawntable[i] & 1 && DRLG_L3SpawnEdge(x - 1, y, totarea)) {
+	if ((spawntable[i] & 1) != 0 && SpawnEdge(x - 1, y, totarea)) {
 		return true;
 	}
-	if (spawntable[i] & 0x80 && DRLG_L3Spawn(x, y - 1, totarea)) {
+	if ((spawntable[i] & 0x80) != 0 && Spawn(x, y - 1, totarea)) {
 		return true;
 	}
-	if (spawntable[i] & 0x40 && DRLG_L3Spawn(x, y + 1, totarea)) {
+	if ((spawntable[i] & 0x40) != 0 && Spawn(x, y + 1, totarea)) {
 		return true;
 	}
-	if (spawntable[i] & 0x20 && DRLG_L3Spawn(x + 1, y, totarea)) {
+	if ((spawntable[i] & 0x20) != 0 && Spawn(x + 1, y, totarea)) {
 		return true;
 	}
-	if (spawntable[i] & 0x10 && DRLG_L3Spawn(x - 1, y, totarea)) {
+	if ((spawntable[i] & 0x10) != 0 && Spawn(x - 1, y, totarea)) {
 		return true;
 	}
 
 	return false;
 }
 
-static bool DRLG_L3Spawn(int x, int y, int *totarea)
+bool Spawn(int x, int y, int *totarea)
 {
 	BYTE i;
 	static BYTE spawntable[15] = { 0x00, 0x0A, 0x03, 0x05, 0x0C, 0x06, 0x09, 0x00, 0x00, 0x0C, 0x03, 0x06, 0x09, 0x0A, 0x05 };
@@ -1489,7 +1476,7 @@ static bool DRLG_L3Spawn(int x, int y, int *totarea)
 	if (x < 0 || y < 0 || x >= DMAXX || y >= DMAXY) {
 		return true;
 	}
-	if (dungeon[x][y] & 0x80) {
+	if ((dungeon[x][y] & 0x80) != 0) {
 		return false;
 	}
 	if (dungeon[x][y] > 15) {
@@ -1501,29 +1488,29 @@ static bool DRLG_L3Spawn(int x, int y, int *totarea)
 	*totarea += 1;
 
 	if (i != 8) {
-		if (spawntable[i] & 8 && DRLG_L3SpawnEdge(x, y - 1, totarea)) {
+		if ((spawntable[i] & 8) != 0 && SpawnEdge(x, y - 1, totarea)) {
 			return true;
 		}
-		if (spawntable[i] & 4 && DRLG_L3SpawnEdge(x, y + 1, totarea)) {
+		if ((spawntable[i] & 4) != 0 && SpawnEdge(x, y + 1, totarea)) {
 			return true;
 		}
-		if (spawntable[i] & 2 && DRLG_L3SpawnEdge(x + 1, y, totarea)) {
+		if ((spawntable[i] & 2) != 0 && SpawnEdge(x + 1, y, totarea)) {
 			return true;
 		}
-		if (spawntable[i] & 1 && DRLG_L3SpawnEdge(x - 1, y, totarea)) {
+		if ((spawntable[i] & 1) != 0 && SpawnEdge(x - 1, y, totarea)) {
 			return true;
 		}
 	} else {
-		if (DRLG_L3Spawn(x + 1, y, totarea)) {
+		if (Spawn(x + 1, y, totarea)) {
 			return true;
 		}
-		if (DRLG_L3Spawn(x - 1, y, totarea)) {
+		if (Spawn(x - 1, y, totarea)) {
 			return true;
 		}
-		if (DRLG_L3Spawn(x, y + 1, totarea)) {
+		if (Spawn(x, y + 1, totarea)) {
 			return true;
 		}
-		if (DRLG_L3Spawn(x, y - 1, totarea)) {
+		if (Spawn(x, y - 1, totarea)) {
 			return true;
 		}
 	}
@@ -1536,49 +1523,45 @@ static bool DRLG_L3Spawn(int x, int y, int *totarea)
  * an area of at most 40 tiles and disconnected from the map edge.
  * If it finds one, converts it to lava tiles and sets lavapool to true.
  */
-static void DRLG_L3Pool()
+void Pool()
 {
-	int i, j, dunx, duny, totarea, poolchance;
-	bool found;
-	BYTE k;
-	static BYTE poolsub[15] = { 0, 35, 26, 36, 25, 29, 34, 7, 33, 28, 27, 37, 32, 31, 30 };
+	constexpr uint8_t Poolsub[15] = { 0, 35, 26, 36, 25, 29, 34, 7, 33, 28, 27, 37, 32, 31, 30 };
 
-	for (duny = 0; duny < DMAXY; duny++) {
-		for (dunx = 0; dunx < DMAXY; dunx++) {
+	for (int duny = 0; duny < DMAXY; duny++) {
+		for (int dunx = 0; dunx < DMAXY; dunx++) {
 			if (dungeon[dunx][duny] != 8) {
 				continue;
 			}
 			dungeon[dunx][duny] |= 0x80;
-			totarea = 1;
+			int totarea = 1;
+			bool found = true;
 			if (dunx + 1 < DMAXX) {
-				found = DRLG_L3Spawn(dunx + 1, duny, &totarea);
-			} else {
-				found = true;
+				found = Spawn(dunx + 1, duny, &totarea);
 			}
 			if (dunx - 1 > 0 && !found) {
-				found = DRLG_L3Spawn(dunx - 1, duny, &totarea);
+				found = Spawn(dunx - 1, duny, &totarea);
 			} else {
 				found = true;
 			}
 			if (duny + 1 < DMAXY && !found) {
-				found = DRLG_L3Spawn(dunx, duny + 1, &totarea);
+				found = Spawn(dunx, duny + 1, &totarea);
 			} else {
 				found = true;
 			}
 			if (duny - 1 > 0 && !found) {
-				found = DRLG_L3Spawn(dunx, duny - 1, &totarea);
+				found = Spawn(dunx, duny - 1, &totarea);
 			} else {
 				found = true;
 			}
-			poolchance = GenerateRnd(100);
-			for (j = std::max(duny - totarea, 0); j < std::min(duny + totarea, DMAXY); j++) {
-				for (i = std::max(dunx - totarea, 0); i < std::min(dunx + totarea, DMAXX); i++) {
+			int poolchance = GenerateRnd(100);
+			for (int j = std::max(duny - totarea, 0); j < std::min(duny + totarea, DMAXY); j++) {
+				for (int i = std::max(dunx - totarea, 0); i < std::min(dunx + totarea, DMAXX); i++) {
 					// BUGFIX: In the following swap the order to first do the
 					// index checks and only then access dungeon[i][j] (fixed)
-					if (dungeon[i][j] & 0x80) {
+					if ((dungeon[i][j] & 0x80) != 0) {
 						dungeon[i][j] &= ~0x80;
 						if (totarea > 4 && poolchance < 25 && !found) {
-							k = poolsub[dungeon[i][j]];
+							uint8_t k = Poolsub[dungeon[i][j]];
 							if (k != 0 && k <= 37) {
 								dungeon[i][j] = k;
 							}
@@ -1591,12 +1574,10 @@ static void DRLG_L3Pool()
 	}
 }
 
-static void DRLG_L3PoolFix()
+void PoolFix()
 {
-	int dunx, duny;
-
-	for (duny = 1; duny < DMAXY - 1; duny++) {     // BUGFIX: Change '0' to '1' and 'DMAXY' to 'DMAXY - 1' (fixed)
-		for (dunx = 1; dunx < DMAXX - 1; dunx++) { // BUGFIX: Change '0' to '1' and 'DMAXX' to 'DMAXX - 1' (fixed)
+	for (int duny = 1; duny < DMAXY - 1; duny++) {     // BUGFIX: Change '0' to '1' and 'DMAXY' to 'DMAXY - 1' (fixed)
+		for (int dunx = 1; dunx < DMAXX - 1; dunx++) { // BUGFIX: Change '0' to '1' and 'DMAXX' to 'DMAXX - 1' (fixed)
 			if (dungeon[dunx][duny] == 8) {
 				if (dungeon[dunx - 1][duny - 1] >= 25 && dungeon[dunx - 1][duny - 1] <= 41
 				    && dungeon[dunx - 1][duny] >= 25 && dungeon[dunx - 1][duny] <= 41
@@ -1615,51 +1596,50 @@ static void DRLG_L3PoolFix()
 	}
 }
 
-static bool DRLG_L3PlaceMiniSet(const BYTE *miniset, int tmin, int tmax, int cx, int cy, bool setview, int ldir)
+bool PlaceMiniSet(const BYTE *miniset, int tmin, int tmax, int cx, int cy, bool setview)
 {
-	int sx, sy, sw, sh, xx, yy, i, ii, numt, trys;
-	bool found;
+	int sw = miniset[0];
+	int sh = miniset[1];
 
-	sw = miniset[0];
-	sh = miniset[1];
-
-	if (tmax - tmin == 0) {
-		numt = 1;
-	} else {
+	int numt = 1;
+	if (tmax - tmin != 0) {
 		numt = GenerateRnd(tmax - tmin) + tmin;
 	}
 
-	for (i = 0; i < numt; i++) {
+	int sx = 0;
+	int sy = 0;
+	for (int i = 0; i < numt; i++) {
 		sx = GenerateRnd(DMAXX - sw);
 		sy = GenerateRnd(DMAXY - sh);
-		found = false;
-		trys = 0;
-		while (!found && trys < 200) {
-			trys++;
-			found = true;
+		bool abort = false;
+		int bailcnt;
+
+		for (bailcnt = 0; !abort && bailcnt < 200;) {
+			bailcnt++;
+			abort = true;
 			if (cx != -1 && sx >= cx - sw && sx <= cx + 12) {
 				sx = GenerateRnd(DMAXX - sw);
 				sy = GenerateRnd(DMAXY - sh);
-				found = false;
+				abort = false;
 			}
 			if (cy != -1 && sy >= cy - sh && sy <= cy + 12) {
 				sx = GenerateRnd(DMAXX - sw);
 				sy = GenerateRnd(DMAXY - sh);
-				found = false;
+				abort = false;
 			}
-			ii = 2;
-			for (yy = 0; yy < sh && found; yy++) {
-				for (xx = 0; xx < sw && found; xx++) {
-					if (miniset[ii] != 0 && dungeon[xx + sx][yy + sy] != miniset[ii]) {
-						found = false;
-					}
-					if (dflags[xx + sx][yy + sy] != 0) {
-						found = false;
-					}
+			int ii = 2;
+
+			for (int yy = 0; yy < sh && abort; yy++) {
+				for (int xx = 0; xx < sw && abort; xx++) {
+					if (miniset[ii] != 0 && dungeon[xx + sx][yy + sy] != miniset[ii])
+						abort = false;
+					if (dflags[xx + sx][yy + sy] != 0)
+						abort = false;
 					ii++;
 				}
 			}
-			if (!found) {
+
+			if (!abort) {
 				sx++;
 				if (sx == DMAXX - sw) {
 					sx = 0;
@@ -1670,12 +1650,13 @@ static bool DRLG_L3PlaceMiniSet(const BYTE *miniset, int tmin, int tmax, int cx,
 				}
 			}
 		}
-		if (trys >= 200) {
+		if (bailcnt >= 200) {
 			return true;
 		}
-		ii = sw * sh + 2;
-		for (yy = 0; yy < sh; yy++) {
-			for (xx = 0; xx < sw; xx++) {
+		int ii = sw * sh + 2;
+
+		for (int yy = 0; yy < sh; yy++) {
+			for (int xx = 0; xx < sw; xx++) {
 				if (miniset[ii] != 0) {
 					dungeon[xx + sx][yy + sy] = miniset[ii];
 				}
@@ -1688,28 +1669,21 @@ static bool DRLG_L3PlaceMiniSet(const BYTE *miniset, int tmin, int tmax, int cx,
 		ViewX = 2 * sx + 17;
 		ViewY = 2 * sy + 19;
 	}
-	if (ldir == 0) {
-		LvlViewX = 2 * sx + 17;
-		LvlViewY = 2 * sy + 19;
-	}
 
 	return false;
 }
 
-static void DRLG_L3PlaceRndSet(const BYTE *miniset, int rndper)
+void PlaceMiniSetRandom(const BYTE *miniset, int rndper)
 {
-	int sx, sy, sw, sh, xx, yy, ii, kk;
-	bool found;
+	int sw = miniset[0];
+	int sh = miniset[1];
 
-	sw = miniset[0];
-	sh = miniset[1];
-
-	for (sy = 0; sy < DMAXX - sh; sy++) {
-		for (sx = 0; sx < DMAXY - sw; sx++) {
-			found = true;
-			ii = 2;
-			for (yy = 0; yy < sh && found; yy++) {
-				for (xx = 0; xx < sw && found; xx++) {
+	for (int sy = 0; sy < DMAXX - sh; sy++) {
+		for (int sx = 0; sx < DMAXY - sw; sx++) {
+			bool found = true;
+			int ii = 2;
+			for (int yy = 0; yy < sh && found; yy++) {
+				for (int xx = 0; xx < sw && found; xx++) {
 					if (miniset[ii] != 0 && dungeon[xx + sx][yy + sy] != miniset[ii]) {
 						found = false;
 					}
@@ -1719,26 +1693,28 @@ static void DRLG_L3PlaceRndSet(const BYTE *miniset, int rndper)
 					ii++;
 				}
 			}
-			kk = sw * sh + 2;
-			if (miniset[kk] >= 84 && miniset[kk] <= 100 && found) {
-				// BUGFIX: accesses to dungeon can go out of bounds (fixed)
-				// BUGFIX: Comparisons vs 100 should use same tile as comparisons vs 84.
-				if (sx - 1 >= 0 && dungeon[sx - 1][sy] >= 84 && dungeon[sx - 1][sy] <= 100) {
-					found = false;
-				}
-				if (sx + 1 < 40 && sx - 1 >= 0 && dungeon[sx + 1][sy] >= 84 && dungeon[sx - 1][sy] <= 100) {
-					found = false;
-				}
-				if (sy + 1 < 40 && sx - 1 >= 0 && dungeon[sx][sy + 1] >= 84 && dungeon[sx - 1][sy] <= 100) {
-					found = false;
-				}
-				if (sy - 1 >= 0 && sx - 1 >= 0 && dungeon[sx][sy - 1] >= 84 && dungeon[sx - 1][sy] <= 100) {
-					found = false;
+			int kk = sw * sh + 2;
+			if (found) {
+				if (miniset[kk] >= 84 && miniset[kk] <= 100) {
+					// BUGFIX: accesses to dungeon can go out of bounds (fixed)
+					// BUGFIX: Comparisons vs 100 should use same tile as comparisons vs 84.
+					if (sx - 1 >= 0 && dungeon[sx - 1][sy] >= 84 && dungeon[sx - 1][sy] <= 100) {
+						found = false;
+					}
+					if (sx + 1 < 40 && sx - 1 >= 0 && dungeon[sx + 1][sy] >= 84 && dungeon[sx - 1][sy] <= 100) {
+						found = false;
+					}
+					if (sy + 1 < 40 && sx - 1 >= 0 && dungeon[sx][sy + 1] >= 84 && dungeon[sx - 1][sy] <= 100) {
+						found = false;
+					}
+					if (sy - 1 >= 0 && sx - 1 >= 0 && dungeon[sx][sy - 1] >= 84 && dungeon[sx - 1][sy] <= 100) {
+						found = false;
+					}
 				}
 			}
 			if (found && GenerateRnd(100) < rndper) {
-				for (yy = 0; yy < sh; yy++) {
-					for (xx = 0; xx < sw; xx++) {
+				for (int yy = 0; yy < sh; yy++) {
+					for (int xx = 0; xx < sw; xx++) {
 						if (miniset[kk] != 0) {
 							dungeon[xx + sx][yy + sy] = miniset[kk];
 						}
@@ -1750,22 +1726,18 @@ static void DRLG_L3PlaceRndSet(const BYTE *miniset, int rndper)
 	}
 }
 
-bool drlg_l3_hive_rnd_piece(const BYTE *miniset, int rndper)
+bool HivePlaceSetRandom(const BYTE *miniset, int rndper)
 {
-	int sx, sy, sw, sh, xx, yy, ii, kk;
-	bool found;
-	bool placed;
+	bool placed = false;
+	int sw = miniset[0];
+	int sh = miniset[1];
 
-	placed = false;
-	sw = miniset[0];
-	sh = miniset[1];
-
-	for (sy = 0; sy < DMAXX - sh; sy++) {
-		for (sx = 0; sx < DMAXY - sw; sx++) {
-			found = true;
-			ii = 2;
-			for (yy = 0; yy < sh && found; yy++) {
-				for (xx = 0; xx < sw && found; xx++) {
+	for (int sy = 0; sy < DMAXX - sh; sy++) {
+		for (int sx = 0; sx < DMAXY - sw; sx++) {
+			bool found = true;
+			int ii = 2;
+			for (int yy = 0; yy < sh && found; yy++) {
+				for (int xx = 0; xx < sw && found; xx++) {
 					if (miniset[ii] != 0 && dungeon[xx + sx][yy + sy] != miniset[ii]) {
 						found = false;
 					}
@@ -1775,27 +1747,29 @@ bool drlg_l3_hive_rnd_piece(const BYTE *miniset, int rndper)
 					ii++;
 				}
 			}
-			kk = sw * sh + 2;
-			if (miniset[kk] >= 84 && miniset[kk] <= 100 && found) {
-				// BUGFIX: accesses to dungeon can go out of bounds
-				// BUGFIX: Comparisons vs 100 should use same tile as comparisons vs 84.
-				if (dungeon[sx - 1][sy] >= 84 && dungeon[sx - 1][sy] <= 100) {
-					found = false;
-				}
-				if (dungeon[sx + 1][sy] >= 84 && dungeon[sx - 1][sy] <= 100) {
-					found = false;
-				}
-				if (dungeon[sx][sy + 1] >= 84 && dungeon[sx - 1][sy] <= 100) {
-					found = false;
-				}
-				if (dungeon[sx][sy - 1] >= 84 && dungeon[sx - 1][sy] <= 100) {
-					found = false;
+			int kk = sw * sh + 2;
+			if (found) {
+				if (miniset[kk] >= 84 && miniset[kk] <= 100) {
+					// BUGFIX: accesses to dungeon can go out of bounds
+					// BUGFIX: Comparisons vs 100 should use same tile as comparisons vs 84.
+					if (dungeon[sx - 1][sy] >= 84 && dungeon[sx - 1][sy] <= 100) {
+						found = false;
+					}
+					if (dungeon[sx + 1][sy] >= 84 && dungeon[sx - 1][sy] <= 100) {
+						found = false;
+					}
+					if (dungeon[sx][sy + 1] >= 84 && dungeon[sx - 1][sy] <= 100) {
+						found = false;
+					}
+					if (dungeon[sx][sy - 1] >= 84 && dungeon[sx - 1][sy] <= 100) {
+						found = false;
+					}
 				}
 			}
 			if (found && GenerateRnd(100) < rndper) {
 				placed = true;
-				for (yy = 0; yy < sh; yy++) {
-					for (xx = 0; xx < sw; xx++) {
+				for (int yy = 0; yy < sh; yy++) {
+					for (int xx = 0; xx < sw; xx++) {
 						if (miniset[kk] != 0) {
 							dungeon[xx + sx][yy + sy] = miniset[kk];
 						}
@@ -1809,26 +1783,11 @@ bool drlg_l3_hive_rnd_piece(const BYTE *miniset, int rndper)
 	return placed;
 }
 
-static bool WoodVertU(int i, int y)
+bool FenceVerticalUp(int i, int y)
 {
 	if ((dungeon[i + 1][y] > 152 || dungeon[i + 1][y] < 130)
 	    && (dungeon[i - 1][y] > 152 || dungeon[i - 1][y] < 130)) {
-		if (dungeon[i][y] == 7) {
-			return true;
-		}
-		if (dungeon[i][y] == 10) {
-			return true;
-		}
-		if (dungeon[i][y] == 126) {
-			return true;
-		}
-		if (dungeon[i][y] == 129) {
-			return true;
-		}
-		if (dungeon[i][y] == 134) {
-			return true;
-		}
-		if (dungeon[i][y] == 136) {
+		if (IsAnyOf(dungeon[i][y], 7, 10, 126, 129, 134, 136)) {
 			return true;
 		}
 	}
@@ -1836,20 +1795,11 @@ static bool WoodVertU(int i, int y)
 	return false;
 }
 
-static bool WoodVertD(int i, int y)
+bool FenceVerticalDown(int i, int y)
 {
 	if ((dungeon[i + 1][y] > 152 || dungeon[i + 1][y] < 130)
 	    && (dungeon[i - 1][y] > 152 || dungeon[i - 1][y] < 130)) {
-		if (dungeon[i][y] == 7) {
-			return true;
-		}
-		if (dungeon[i][y] == 2) {
-			return true;
-		}
-		if (dungeon[i][y] == 134) {
-			return true;
-		}
-		if (dungeon[i][y] == 136) {
+		if (IsAnyOf(dungeon[i][y], 2, 7, 134, 136)) {
 			return true;
 		}
 	}
@@ -1857,26 +1807,11 @@ static bool WoodVertD(int i, int y)
 	return false;
 }
 
-static bool WoodHorizL(int x, int j)
+bool FenceHorizontalLeft(int x, int j)
 {
 	if ((dungeon[x][j + 1] > 152 || dungeon[x][j + 1] < 130)
 	    && (dungeon[x][j - 1] > 152 || dungeon[x][j - 1] < 130)) {
-		if (dungeon[x][j] == 7) {
-			return true;
-		}
-		if (dungeon[x][j] == 9) {
-			return true;
-		}
-		if (dungeon[x][j] == 121) {
-			return true;
-		}
-		if (dungeon[x][j] == 124) {
-			return true;
-		}
-		if (dungeon[x][j] == 135) {
-			return true;
-		}
-		if (dungeon[x][j] == 137) {
+		if (IsAnyOf(dungeon[x][j], 7, 9, 121, 124, 135, 137)) {
 			return true;
 		}
 	}
@@ -1884,20 +1819,11 @@ static bool WoodHorizL(int x, int j)
 	return false;
 }
 
-static bool WoodHorizR(int x, int j)
+bool FenceHorizontalRight(int x, int j)
 {
 	if ((dungeon[x][j + 1] > 152 || dungeon[x][j + 1] < 130)
 	    && (dungeon[x][j - 1] > 152 || dungeon[x][j - 1] < 130)) {
-		if (dungeon[x][j] == 7) {
-			return true;
-		}
-		if (dungeon[x][j] == 4) {
-			return true;
-		}
-		if (dungeon[x][j] == 135) {
-			return true;
-		}
-		if (dungeon[x][j] == 137) {
+		if (IsAnyOf(dungeon[x][j], 4, 7, 135, 137)) {
 			return true;
 		}
 	}
@@ -1907,10 +1833,8 @@ static bool WoodHorizR(int x, int j)
 
 void AddFenceDoors()
 {
-	int i, j;
-
-	for (j = 0; j < DMAXY; j++) {
-		for (i = 0; i < DMAXX; i++) {
+	for (int j = 0; j < DMAXY; j++) {
+		for (int i = 0; i < DMAXX; i++) {
 			if (dungeon[i][j] == 7) {
 				if (dungeon[i - 1][j] <= 152 && dungeon[i - 1][j] >= 130
 				    && dungeon[i + 1][j] <= 152 && dungeon[i + 1][j] >= 130) {
@@ -1931,10 +1855,8 @@ void AddFenceDoors()
 
 void FenceDoorFix()
 {
-	int i, j;
-
-	for (j = 0; j < DMAXY; j++) {
-		for (i = 0; i < DMAXX; i++) {
+	for (int j = 0; j < DMAXY; j++) {
+		for (int i = 0; i < DMAXX; i++) {
 			if (dungeon[i][j] == 146) {
 				if (dungeon[i + 1][j] > 152 || dungeon[i + 1][j] < 130
 				    || dungeon[i - 1][j] > 152 || dungeon[i - 1][j] < 130) {
@@ -1943,13 +1865,7 @@ void FenceDoorFix()
 				}
 			}
 			if (dungeon[i][j] == 146) {
-				if (dungeon[i + 1][j] != 130 && dungeon[i - 1][j] != 130
-				    && dungeon[i + 1][j] != 132 && dungeon[i - 1][j] != 132
-				    && dungeon[i + 1][j] != 133 && dungeon[i - 1][j] != 133
-				    && dungeon[i + 1][j] != 134 && dungeon[i - 1][j] != 134
-				    && dungeon[i + 1][j] != 136 && dungeon[i - 1][j] != 136
-				    && dungeon[i + 1][j] != 138 && dungeon[i - 1][j] != 138
-				    && dungeon[i + 1][j] != 140 && dungeon[i - 1][j] != 140) {
+				if (IsNoneOf(dungeon[i + 1][j], 130, 132, 133, 134, 136, 138, 140) && IsNoneOf(dungeon[i - 1][j], 130, 132, 133, 134, 136, 138, 140)) {
 					dungeon[i][j] = 7;
 					continue;
 				}
@@ -1962,13 +1878,7 @@ void FenceDoorFix()
 				}
 			}
 			if (dungeon[i][j] == 147) {
-				if (dungeon[i][j + 1] != 131 && dungeon[i][j - 1] != 131
-				    && dungeon[i][j + 1] != 132 && dungeon[i][j - 1] != 132
-				    && dungeon[i][j + 1] != 133 && dungeon[i][j - 1] != 133
-				    && dungeon[i][j + 1] != 135 && dungeon[i][j - 1] != 135
-				    && dungeon[i][j + 1] != 137 && dungeon[i][j - 1] != 137
-				    && dungeon[i][j + 1] != 138 && dungeon[i][j - 1] != 138
-				    && dungeon[i][j + 1] != 139 && dungeon[i][j - 1] != 139) {
+				if (IsNoneOf(dungeon[i][j + 1], 131, 132, 133, 135, 137, 138, 139) && IsNoneOf(dungeon[i][j - 1], 131, 132, 133, 135, 137, 138, 139)) {
 					dungeon[i][j] = 7;
 					continue;
 				}
@@ -1977,27 +1887,19 @@ void FenceDoorFix()
 	}
 }
 
-static void DRLG_L3Wood()
+void Fence()
 {
-#if (_MSC_VER >= 1920)
-	volatile // visual studio 2019 throws internal compiler error without it, see #708
-
-#endif
-	    int i,
-	    j, x, y, xx, yy, rt, rp, x1, y1, x2, y2;
-	bool skip;
-
-	for (j = 1; j < DMAXY - 1; j++) {     // BUGFIX: Change '0' to '1' (fixed)
-		for (i = 1; i < DMAXX - 1; i++) { // BUGFIX: Change '0' to '1' (fixed)
+	for (int j = 1; j < DMAXY - 1; j++) {     // BUGFIX: Change '0' to '1' (fixed)
+		for (int i = 1; i < DMAXX - 1; i++) { // BUGFIX: Change '0' to '1' (fixed)
 			if (dungeon[i][j] == 10 && GenerateRnd(2) != 0) {
-				x = i;
+				int x = i;
 				while (dungeon[x][j] == 10) {
 					x++;
 				}
 				x--;
 				if (x - i > 0) {
 					dungeon[i][j] = 127;
-					for (xx = i + 1; xx < x; xx++) {
+					for (int xx = i + 1; xx < x; xx++) {
 						if (GenerateRnd(2) != 0) {
 							dungeon[xx][j] = 126;
 						} else {
@@ -2008,14 +1910,14 @@ static void DRLG_L3Wood()
 				}
 			}
 			if (dungeon[i][j] == 9 && GenerateRnd(2) != 0) {
-				y = j;
+				int y = j;
 				while (dungeon[i][y] == 9) {
 					y++;
 				}
 				y--;
 				if (y - j > 0) {
 					dungeon[i][j] = 123;
-					for (yy = j + 1; yy < y; yy++) {
+					for (int yy = j + 1; yy < y; yy++) {
 						if (GenerateRnd(2) != 0) {
 							dungeon[i][yy] = 121;
 						} else {
@@ -2027,12 +1929,12 @@ static void DRLG_L3Wood()
 			}
 			if (dungeon[i][j] == 11 && dungeon[i + 1][j] == 10 && dungeon[i][j + 1] == 9 && GenerateRnd(2) != 0) {
 				dungeon[i][j] = 125;
-				x = i + 1;
+				int x = i + 1;
 				while (dungeon[x][j] == 10) {
 					x++;
 				}
 				x--;
-				for (xx = i + 1; xx < x; xx++) {
+				for (int xx = i + 1; xx < x; xx++) {
 					if (GenerateRnd(2) != 0) {
 						dungeon[xx][j] = 126;
 					} else {
@@ -2040,12 +1942,12 @@ static void DRLG_L3Wood()
 					}
 				}
 				dungeon[x][j] = 128;
-				y = j + 1;
+				int y = j + 1;
 				while (dungeon[i][y] == 9) {
 					y++;
 				}
 				y--;
-				for (yy = j + 1; yy < y; yy++) {
+				for (int yy = j + 1; yy < y; yy++) {
 					if (GenerateRnd(2) != 0) {
 						dungeon[i][yy] = 121;
 					} else {
@@ -2057,24 +1959,24 @@ static void DRLG_L3Wood()
 		}
 	}
 
-	for (j = 1; j < DMAXY; j++) {     // BUGFIX: Change '0' to '1' (fixed)
-		for (i = 1; i < DMAXX; i++) { // BUGFIX: Change '0' to '1' (fixed)
+	for (int j = 1; j < DMAXY; j++) {     // BUGFIX: Change '0' to '1' (fixed)
+		for (int i = 1; i < DMAXX; i++) { // BUGFIX: Change '0' to '1' (fixed)
 			if (dungeon[i][j] == 7 && GenerateRnd(1) == 0 && SkipThemeRoom(i, j)) {
-				rt = GenerateRnd(2);
+				int rt = GenerateRnd(2);
 				if (rt == 0) {
-					y1 = j;
+					int y1 = j;
 					// BUGFIX: Check `y1 >= 0` first (fixed)
-					while (y1 >= 0 && WoodVertU(i, y1)) {
+					while (y1 >= 0 && FenceVerticalUp(i, y1)) {
 						y1--;
 					}
 					y1++;
-					y2 = j;
+					int y2 = j;
 					// BUGFIX: Check `y2 < DMAXY` first (fixed)
-					while (y2 < DMAXY && WoodVertD(i, y2)) {
+					while (y2 < DMAXY && FenceVerticalDown(i, y2)) {
 						y2++;
 					}
 					y2--;
-					skip = true;
+					bool skip = true;
 					if (dungeon[i][y1] == 7) {
 						skip = false;
 					}
@@ -2082,8 +1984,8 @@ static void DRLG_L3Wood()
 						skip = false;
 					}
 					if (y2 - y1 > 1 && skip) {
-						rp = GenerateRnd(y2 - y1 - 1) + y1 + 1;
-						for (y = y1; y <= y2; y++) {
+						int rp = GenerateRnd(y2 - y1 - 1) + y1 + 1;
+						for (int y = y1; y <= y2; y++) {
 							if (y == rp) {
 								continue;
 							}
@@ -2116,19 +2018,19 @@ static void DRLG_L3Wood()
 					}
 				}
 				if (rt == 1) {
-					x1 = i;
+					int x1 = i;
 					// BUGFIX: Check `x1 >= 0` first (fixed)
-					while (x1 >= 0 && WoodHorizL(x1, j)) {
+					while (x1 >= 0 && FenceHorizontalLeft(x1, j)) {
 						x1--;
 					}
 					x1++;
-					x2 = i;
+					int x2 = i;
 					// BUGFIX: Check `x2 < DMAXX` first (fixed)
-					while (x2 < DMAXX && WoodHorizR(x2, j)) {
+					while (x2 < DMAXX && FenceHorizontalRight(x2, j)) {
 						x2++;
 					}
 					x2--;
-					skip = true;
+					bool skip = true;
 					if (dungeon[x1][j] == 7) {
 						skip = false;
 					}
@@ -2136,8 +2038,8 @@ static void DRLG_L3Wood()
 						skip = false;
 					}
 					if (x2 - x1 > 1 && skip) {
-						rp = GenerateRnd(x2 - x1 - 1) + x1 + 1;
-						for (x = x1; x <= x2; x++) {
+						int rp = GenerateRnd(x2 - x1 - 1) + x1 + 1;
+						for (int x = x1; x <= x2; x++) {
 							if (x == rp) {
 								continue;
 							}
@@ -2177,24 +2079,21 @@ static void DRLG_L3Wood()
 	FenceDoorFix();
 }
 
-static bool DRLG_L3Anvil()
+bool Anvil()
 {
-	int sx, sy, sw, sh, xx, yy, ii, trys;
-	bool found;
+	int sw = L3ANVIL[0];
+	int sh = L3ANVIL[1];
+	int sx = GenerateRnd(DMAXX - sw);
+	int sy = GenerateRnd(DMAXY - sh);
 
-	sw = L3ANVIL[0];
-	sh = L3ANVIL[1];
-	sx = GenerateRnd(DMAXX - sw);
-	sy = GenerateRnd(DMAXY - sh);
-
-	found = false;
-	trys = 0;
+	bool found = false;
+	int trys = 0;
 	while (!found && trys < 200) {
 		trys++;
 		found = true;
-		ii = 2;
-		for (yy = 0; yy < sh && found; yy++) {
-			for (xx = 0; xx < sw && found; xx++) {
+		int ii = 2;
+		for (int yy = 0; yy < sh && found; yy++) {
+			for (int xx = 0; xx < sw && found; xx++) {
 				if (L3ANVIL[ii] != 0 && dungeon[xx + sx][yy + sy] != L3ANVIL[ii]) {
 					found = false;
 				}
@@ -2219,9 +2118,9 @@ static bool DRLG_L3Anvil()
 		return true;
 	}
 
-	ii = sw * sh + 2;
-	for (yy = 0; yy < sh; yy++) {
-		for (xx = 0; xx < sw; xx++) {
+	int ii = sw * sh + 2;
+	for (int yy = 0; yy < sh; yy++) {
+		for (int xx = 0; xx < sw; xx++) {
 			if (L3ANVIL[ii] != 0) {
 				dungeon[xx + sx][yy + sy] = L3ANVIL[ii];
 			}
@@ -2238,12 +2137,10 @@ static bool DRLG_L3Anvil()
 	return false;
 }
 
-static void FixL3Warp()
+void Warp()
 {
-	int i, j;
-
-	for (j = 0; j < DMAXY; j++) {
-		for (i = 0; i < DMAXX; i++) {
+	for (int j = 0; j < DMAXY; j++) {
+		for (int i = 0; i < DMAXX; i++) {
 			if (dungeon[i][j] == 125 && dungeon[i + 1][j] == 125 && dungeon[i][j + 1] == 125 && dungeon[i + 1][j + 1] == 125) {
 				dungeon[i][j] = 156;
 				dungeon[i + 1][j] = 155;
@@ -2258,19 +2155,17 @@ static void FixL3Warp()
 	}
 }
 
-static void FixL3HallofHeroes()
+void HallOfHeroes()
 {
-	int i, j;
-
-	for (j = 0; j < DMAXY; j++) {
-		for (i = 0; i < DMAXX; i++) {
+	for (int j = 0; j < DMAXY; j++) {
+		for (int i = 0; i < DMAXX; i++) {
 			if (dungeon[i][j] == 5 && dungeon[i + 1][j + 1] == 7) {
 				dungeon[i][j] = 7;
 			}
 		}
 	}
-	for (j = 0; j < DMAXY; j++) {
-		for (i = 0; i < DMAXX; i++) {
+	for (int j = 0; j < DMAXY; j++) {
+		for (int i = 0; i < DMAXX; i++) {
 			if (dungeon[i][j] == 5 && dungeon[i + 1][j + 1] == 12 && dungeon[i + 1][j] == 7) {
 				dungeon[i][j] = 7;
 				dungeon[i][j + 1] = 7;
@@ -2285,7 +2180,7 @@ static void FixL3HallofHeroes()
 	}
 }
 
-static void DRLG_L3LockRec(int x, int y)
+void LockRectangle(int x, int y)
 {
 	if (!lockout[x][y]) {
 		return;
@@ -2293,19 +2188,20 @@ static void DRLG_L3LockRec(int x, int y)
 
 	lockout[x][y] = false;
 	lockoutcnt++;
-	DRLG_L3LockRec(x, y - 1);
-	DRLG_L3LockRec(x, y + 1);
-	DRLG_L3LockRec(x - 1, y);
-	DRLG_L3LockRec(x + 1, y);
+	LockRectangle(x, y - 1);
+	LockRectangle(x, y + 1);
+	LockRectangle(x - 1, y);
+	LockRectangle(x + 1, y);
 }
 
-bool DRLG_L3Lockout()
+bool Lockout()
 {
-	int i, j, t, fx, fy;
+	int fx;
+	int fy;
 
-	t = 0;
-	for (j = 0; j < DMAXY; j++) {
-		for (i = 0; i < DMAXX; i++) {
+	int t = 0;
+	for (int j = 0; j < DMAXY; j++) {
+		for (int i = 0; i < DMAXX; i++) {
 			if (dungeon[i][j] != 0) {
 				lockout[i][j] = true;
 				fx = i;
@@ -2318,159 +2214,163 @@ bool DRLG_L3Lockout()
 	}
 
 	lockoutcnt = 0;
-	DRLG_L3LockRec(fx, fy);
+	LockRectangle(fx, fy);
 
 	return t == lockoutcnt;
 }
 
-static void DRLG_L3(lvl_entry entry)
+void GenerateLevel(lvl_entry entry)
 {
-	int x1, y1, x2, y2, i, j;
-	bool found, genok;
+	bool found;
+	bool genok;
 
 	lavapool = 0;
 
 	do {
 		do {
 			do {
-				InitL3Dungeon();
-				x1 = GenerateRnd(20) + 10;
-				y1 = GenerateRnd(20) + 10;
-				x2 = x1 + 2;
-				y2 = y1 + 2;
-				DRLG_L3FillRoom(x1, y1, x2, y2);
-				DRLG_L3CreateBlock(x1, y1, 2, 0);
-				DRLG_L3CreateBlock(x2, y1, 2, 1);
-				DRLG_L3CreateBlock(x1, y2, 2, 2);
-				DRLG_L3CreateBlock(x1, y1, 2, 3);
+				InitDungeonFlags();
+				int x1 = GenerateRnd(20) + 10;
+				int y1 = GenerateRnd(20) + 10;
+				int x2 = x1 + 2;
+				int y2 = y1 + 2;
+				FillRoom(x1, y1, x2, y2);
+				CreateBlock(x1, y1, 2, 0);
+				CreateBlock(x2, y1, 2, 1);
+				CreateBlock(x1, y2, 2, 2);
+				CreateBlock(x1, y1, 2, 3);
 				if (QuestStatus(Q_ANVIL)) {
 					x1 = GenerateRnd(10) + 10;
 					y1 = GenerateRnd(10) + 10;
 					x2 = x1 + 12;
 					y2 = y1 + 12;
-					DRLG_L3FloorArea(x1, y1, x2, y2);
+					FloorArea(x1, y1, x2, y2);
 				}
-				DRLG_L3FillDiags();
-				DRLG_L3FillSingles();
-				DRLG_L3FillStraights();
-				DRLG_L3FillDiags();
-				DRLG_L3Edges();
-				if (DRLG_L3GetFloorArea() >= 600) {
-					found = DRLG_L3Lockout();
+				FillDiagonals();
+				FillSingles();
+				FillStraights();
+				FillDiagonals();
+				Edges();
+				if (GetFloorArea() >= 600) {
+					found = Lockout();
 				} else {
 					found = false;
 				}
 			} while (!found);
-			DRLG_L3MakeMegas();
+			MakeMegas();
 			if (entry == ENTRY_MAIN) {
 				if (currlevel < 17) {
-					genok = DRLG_L3PlaceMiniSet(L3UP, 1, 1, -1, -1, true, 0);
+					genok = PlaceMiniSet(L3UP, 1, 1, -1, -1, true);
 				} else {
 					if (currlevel != 17)
-						genok = DRLG_L3PlaceMiniSet(L6UP, 1, 1, -1, -1, true, 0);
+						genok = PlaceMiniSet(L6UP, 1, 1, -1, -1, true);
 					else
-						genok = DRLG_L3PlaceMiniSet(L6HOLDWARP, 1, 1, -1, -1, true, 6);
+						genok = PlaceMiniSet(L6HOLDWARP, 1, 1, -1, -1, true);
 				}
 				if (!genok) {
 					if (currlevel < 17) {
-						genok = DRLG_L3PlaceMiniSet(L3DOWN, 1, 1, -1, -1, false, 1);
+						genok = PlaceMiniSet(L3DOWN, 1, 1, -1, -1, false);
 					} else {
 						if (currlevel != 20)
-							genok = DRLG_L3PlaceMiniSet(L6DOWN, 1, 1, -1, -1, false, 1);
+							genok = PlaceMiniSet(L6DOWN, 1, 1, -1, -1, false);
 					}
 					if (!genok && currlevel == 9) {
-						genok = DRLG_L3PlaceMiniSet(L3HOLDWARP, 1, 1, -1, -1, false, 6);
+						genok = PlaceMiniSet(L3HOLDWARP, 1, 1, -1, -1, false);
 					}
 				}
 			} else if (entry == ENTRY_PREV) {
 				if (currlevel < 17) {
-					genok = DRLG_L3PlaceMiniSet(L3UP, 1, 1, -1, -1, false, 0);
+					genok = PlaceMiniSet(L3UP, 1, 1, -1, -1, false);
 				} else {
 					if (currlevel != 17)
-						genok = DRLG_L3PlaceMiniSet(L6UP, 1, 1, -1, -1, false, 0);
+						genok = PlaceMiniSet(L6UP, 1, 1, -1, -1, false);
 					else
-						genok = DRLG_L3PlaceMiniSet(L6HOLDWARP, 1, 1, -1, -1, false, 6);
+						genok = PlaceMiniSet(L6HOLDWARP, 1, 1, -1, -1, false);
 				}
 				if (!genok) {
 					if (currlevel < 17) {
-						genok = DRLG_L3PlaceMiniSet(L3DOWN, 1, 1, -1, -1, true, 1);
+						genok = PlaceMiniSet(L3DOWN, 1, 1, -1, -1, true);
 						ViewX += 2;
 						ViewY -= 2;
 					} else {
 						if (currlevel != 20) {
-							genok = DRLG_L3PlaceMiniSet(L6DOWN, 1, 1, -1, -1, true, 1);
+							genok = PlaceMiniSet(L6DOWN, 1, 1, -1, -1, true);
 							ViewX += 2;
 							ViewY -= 2;
 						}
 					}
 					if (!genok && currlevel == 9) {
-						genok = DRLG_L3PlaceMiniSet(L3HOLDWARP, 1, 1, -1, -1, false, 6);
+						genok = PlaceMiniSet(L3HOLDWARP, 1, 1, -1, -1, false);
 					}
 				}
 			} else {
 				if (currlevel < 17) {
-					genok = DRLG_L3PlaceMiniSet(L3UP, 1, 1, -1, -1, false, 0);
+					genok = PlaceMiniSet(L3UP, 1, 1, -1, -1, false);
 				} else {
 					if (currlevel != 17)
-						genok = DRLG_L3PlaceMiniSet(L6UP, 1, 1, -1, -1, false, 0);
+						genok = PlaceMiniSet(L6UP, 1, 1, -1, -1, false);
 					else
-						genok = DRLG_L3PlaceMiniSet(L6HOLDWARP, 1, 1, -1, -1, true, 6);
+						genok = PlaceMiniSet(L6HOLDWARP, 1, 1, -1, -1, true);
 				}
 				if (!genok) {
 					if (currlevel < 17) {
-						genok = DRLG_L3PlaceMiniSet(L3DOWN, 1, 1, -1, -1, false, 1);
+						genok = PlaceMiniSet(L3DOWN, 1, 1, -1, -1, false);
 					} else {
 						if (currlevel != 20)
-							genok = DRLG_L3PlaceMiniSet(L6DOWN, 1, 1, -1, -1, false, 1);
+							genok = PlaceMiniSet(L6DOWN, 1, 1, -1, -1, false);
 					}
 					if (!genok && currlevel == 9) {
-						genok = DRLG_L3PlaceMiniSet(L3HOLDWARP, 1, 1, -1, -1, true, 6);
+						genok = PlaceMiniSet(L3HOLDWARP, 1, 1, -1, -1, true);
 					}
 				}
 			}
 			if (!genok && QuestStatus(Q_ANVIL)) {
-				genok = DRLG_L3Anvil();
+				genok = Anvil();
 			}
 		} while (genok);
 		if (currlevel < 17) {
-			DRLG_L3Pool();
+			Pool();
 		} else {
-			lavapool += drlg_l3_hive_rnd_piece(byte_48A998, 30);
-			lavapool += drlg_l3_hive_rnd_piece(byte_48A9C8, 40);
-			lavapool += drlg_l3_hive_rnd_piece(byte_48A948, 50);
-			lavapool += drlg_l3_hive_rnd_piece(byte_48A970, 60);
+			if (HivePlaceSetRandom(HivePattern41, 30))
+				lavapool++;
+			if (HivePlaceSetRandom(HivePattern42, 40))
+				lavapool++;
+			if (HivePlaceSetRandom(HivePattern39, 50))
+				lavapool++;
+			if (HivePlaceSetRandom(HivePattern40, 60))
+				lavapool++;
 			if (lavapool < 3)
 				lavapool = 0;
 		}
 	} while (lavapool == 0);
 
 	if (currlevel < 17)
-		DRLG_L3PoolFix();
+		PoolFix();
 	if (currlevel < 17)
-		FixL3Warp();
+		Warp();
 
 	if (currlevel < 17) {
-		DRLG_L3PlaceRndSet(L3ISLE1, 70);
-		DRLG_L3PlaceRndSet(L3ISLE2, 70);
-		DRLG_L3PlaceRndSet(L3ISLE3, 30);
-		DRLG_L3PlaceRndSet(L3ISLE4, 30);
-		DRLG_L3PlaceRndSet(L3ISLE1, 100);
-		DRLG_L3PlaceRndSet(L3ISLE2, 100);
-		DRLG_L3PlaceRndSet(L3ISLE5, 90);
+		PlaceMiniSetRandom(L3ISLE1, 70);
+		PlaceMiniSetRandom(L3ISLE2, 70);
+		PlaceMiniSetRandom(L3ISLE3, 30);
+		PlaceMiniSetRandom(L3ISLE4, 30);
+		PlaceMiniSetRandom(L3ISLE1, 100);
+		PlaceMiniSetRandom(L3ISLE2, 100);
+		PlaceMiniSetRandom(L3ISLE5, 90);
 	} else {
-		DRLG_L3PlaceRndSet(L6ISLE1, 70);
-		DRLG_L3PlaceRndSet(L6ISLE2, 70);
-		DRLG_L3PlaceRndSet(L6ISLE3, 30);
-		DRLG_L3PlaceRndSet(L6ISLE4, 30);
-		DRLG_L3PlaceRndSet(L6ISLE1, 100);
-		DRLG_L3PlaceRndSet(L6ISLE2, 100);
-		DRLG_L3PlaceRndSet(L6ISLE5, 90);
+		PlaceMiniSetRandom(L6ISLE1, 70);
+		PlaceMiniSetRandom(L6ISLE2, 70);
+		PlaceMiniSetRandom(L6ISLE3, 30);
+		PlaceMiniSetRandom(L6ISLE4, 30);
+		PlaceMiniSetRandom(L6ISLE1, 100);
+		PlaceMiniSetRandom(L6ISLE2, 100);
+		PlaceMiniSetRandom(L6ISLE5, 90);
 	}
 
 	if (currlevel < 17)
-		FixL3HallofHeroes();
+		HallOfHeroes();
 	if (currlevel < 17)
-		DRLG_L3River();
+		River();
 
 	if (QuestStatus(Q_ANVIL)) {
 		dungeon[setpc_x + 7][setpc_y + 5] = 7;
@@ -2482,90 +2382,90 @@ static void DRLG_L3(lvl_entry entry)
 	}
 
 	if (currlevel < 17)
-		DRLG_PlaceThemeRooms(5, 10, 7, 0, 0);
+		DRLG_PlaceThemeRooms(5, 10, 7, 0, false);
 
 	if (currlevel < 17) {
-		DRLG_L3Wood();
-		DRLG_L3PlaceRndSet(L3TITE1, 10);
-		DRLG_L3PlaceRndSet(L3TITE2, 10);
-		DRLG_L3PlaceRndSet(L3TITE3, 10);
-		DRLG_L3PlaceRndSet(L3TITE6, 20);
-		DRLG_L3PlaceRndSet(L3TITE7, 20);
-		DRLG_L3PlaceRndSet(L3TITE8, 20);
-		DRLG_L3PlaceRndSet(L3TITE9, 20);
-		DRLG_L3PlaceRndSet(L3TITE10, 20);
-		DRLG_L3PlaceRndSet(L3TITE11, 30);
-		DRLG_L3PlaceRndSet(L3TITE12, 20);
-		DRLG_L3PlaceRndSet(L3TITE13, 20);
-		DRLG_L3PlaceRndSet(L3CREV1, 30);
-		DRLG_L3PlaceRndSet(L3CREV2, 30);
-		DRLG_L3PlaceRndSet(L3CREV3, 30);
-		DRLG_L3PlaceRndSet(L3CREV4, 30);
-		DRLG_L3PlaceRndSet(L3CREV5, 30);
-		DRLG_L3PlaceRndSet(L3CREV6, 30);
-		DRLG_L3PlaceRndSet(L3CREV7, 30);
-		DRLG_L3PlaceRndSet(L3CREV8, 30);
-		DRLG_L3PlaceRndSet(L3CREV9, 30);
-		DRLG_L3PlaceRndSet(L3CREV10, 30);
-		DRLG_L3PlaceRndSet(L3CREV11, 30);
-		DRLG_L3PlaceRndSet(L3XTRA1, 25);
-		DRLG_L3PlaceRndSet(L3XTRA2, 25);
-		DRLG_L3PlaceRndSet(L3XTRA3, 25);
-		DRLG_L3PlaceRndSet(L3XTRA4, 25);
-		DRLG_L3PlaceRndSet(L3XTRA5, 25);
+		Fence();
+		PlaceMiniSetRandom(L3TITE1, 10);
+		PlaceMiniSetRandom(L3TITE2, 10);
+		PlaceMiniSetRandom(L3TITE3, 10);
+		PlaceMiniSetRandom(L3TITE6, 20);
+		PlaceMiniSetRandom(L3TITE7, 20);
+		PlaceMiniSetRandom(L3TITE8, 20);
+		PlaceMiniSetRandom(L3TITE9, 20);
+		PlaceMiniSetRandom(L3TITE10, 20);
+		PlaceMiniSetRandom(L3TITE11, 30);
+		PlaceMiniSetRandom(L3TITE12, 20);
+		PlaceMiniSetRandom(L3TITE13, 20);
+		PlaceMiniSetRandom(L3CREV1, 30);
+		PlaceMiniSetRandom(L3CREV2, 30);
+		PlaceMiniSetRandom(L3CREV3, 30);
+		PlaceMiniSetRandom(L3CREV4, 30);
+		PlaceMiniSetRandom(L3CREV5, 30);
+		PlaceMiniSetRandom(L3CREV6, 30);
+		PlaceMiniSetRandom(L3CREV7, 30);
+		PlaceMiniSetRandom(L3CREV8, 30);
+		PlaceMiniSetRandom(L3CREV9, 30);
+		PlaceMiniSetRandom(L3CREV10, 30);
+		PlaceMiniSetRandom(L3CREV11, 30);
+		PlaceMiniSetRandom(L3XTRA1, 25);
+		PlaceMiniSetRandom(L3XTRA2, 25);
+		PlaceMiniSetRandom(L3XTRA3, 25);
+		PlaceMiniSetRandom(L3XTRA4, 25);
+		PlaceMiniSetRandom(L3XTRA5, 25);
 	} else {
-		DRLG_L3PlaceRndSet(byte_48A76C, 20);
-		DRLG_L3PlaceRndSet(byte_48A770, 20);
-		DRLG_L3PlaceRndSet(byte_48A774, 20);
-		DRLG_L3PlaceRndSet(byte_48A778, 20);
-		DRLG_L3PlaceRndSet(byte_48A808, 10);
-		DRLG_L3PlaceRndSet(byte_48A820, 15);
-		DRLG_L3PlaceRndSet(byte_48A838, 20);
-		DRLG_L3PlaceRndSet(byte_48A850, 25);
-		DRLG_L3PlaceRndSet(byte_48A868, 30);
-		DRLG_L3PlaceRndSet(byte_48A880, 35);
-		DRLG_L3PlaceRndSet(byte_48A898, 40);
-		DRLG_L3PlaceRndSet(byte_48A8B0, 45);
-		DRLG_L3PlaceRndSet(byte_48A8C8, 50);
-		DRLG_L3PlaceRndSet(byte_48A8E0, 55);
-		DRLG_L3PlaceRndSet(byte_48A8E0, 10);
-		DRLG_L3PlaceRndSet(byte_48A8C8, 15);
-		DRLG_L3PlaceRndSet(byte_48A8B0, 20);
-		DRLG_L3PlaceRndSet(byte_48A898, 25);
-		DRLG_L3PlaceRndSet(byte_48A880, 30);
-		DRLG_L3PlaceRndSet(byte_48A868, 35);
-		DRLG_L3PlaceRndSet(byte_48A850, 40);
-		DRLG_L3PlaceRndSet(byte_48A838, 45);
-		DRLG_L3PlaceRndSet(byte_48A820, 50);
-		DRLG_L3PlaceRndSet(byte_48A808, 55);
-		DRLG_L3PlaceRndSet(byte_48A790, 40);
-		DRLG_L3PlaceRndSet(byte_48A7A8, 45);
-		DRLG_L3PlaceRndSet(byte_48A77C, 25);
-		DRLG_L3PlaceRndSet(byte_48A780, 25);
-		DRLG_L3PlaceRndSet(byte_48A784, 25);
-		DRLG_L3PlaceRndSet(byte_48A788, 25);
-		DRLG_L3PlaceRndSet(byte_48A7BC, 25);
-		DRLG_L3PlaceRndSet(byte_48A7C0, 25);
-		DRLG_L3PlaceRndSet(byte_48A7C4, 25);
-		DRLG_L3PlaceRndSet(byte_48A7C8, 25);
-		DRLG_L3PlaceRndSet(byte_48A7CC, 25);
-		DRLG_L3PlaceRndSet(byte_48A7D4, 25);
-		DRLG_L3PlaceRndSet(byte_48A7D8, 25);
-		DRLG_L3PlaceRndSet(byte_48A7DC, 25);
-		DRLG_L3PlaceRndSet(byte_48A7E0, 25);
-		DRLG_L3PlaceRndSet(byte_48A7E4, 25);
-		DRLG_L3PlaceRndSet(byte_48A7EC, 25);
-		DRLG_L3PlaceRndSet(byte_48A7F0, 25);
-		DRLG_L3PlaceRndSet(byte_48A7F4, 25);
-		DRLG_L3PlaceRndSet(byte_48A7F8, 25);
-		DRLG_L3PlaceRndSet(byte_48A7D0, 25);
-		DRLG_L3PlaceRndSet(byte_48A7E8, 25);
-		DRLG_L3PlaceRndSet(byte_48A7FC, 25);
-		DRLG_L3PlaceRndSet(byte_48A800, 25);
+		PlaceMiniSetRandom(HivePattern1, 20);
+		PlaceMiniSetRandom(HivePattern2, 20);
+		PlaceMiniSetRandom(HivePattern3, 20);
+		PlaceMiniSetRandom(HivePattern4, 20);
+		PlaceMiniSetRandom(HivePattern29, 10);
+		PlaceMiniSetRandom(HivePattern30, 15);
+		PlaceMiniSetRandom(HivePattern31, 20);
+		PlaceMiniSetRandom(HivePattern32, 25);
+		PlaceMiniSetRandom(HivePattern33, 30);
+		PlaceMiniSetRandom(HivePattern34, 35);
+		PlaceMiniSetRandom(HivePattern35, 40);
+		PlaceMiniSetRandom(HivePattern36, 45);
+		PlaceMiniSetRandom(HivePattern37, 50);
+		PlaceMiniSetRandom(HivePattern38, 55);
+		PlaceMiniSetRandom(HivePattern38, 10);
+		PlaceMiniSetRandom(HivePattern37, 15);
+		PlaceMiniSetRandom(HivePattern36, 20);
+		PlaceMiniSetRandom(HivePattern35, 25);
+		PlaceMiniSetRandom(HivePattern34, 30);
+		PlaceMiniSetRandom(HivePattern33, 35);
+		PlaceMiniSetRandom(HivePattern32, 40);
+		PlaceMiniSetRandom(HivePattern31, 45);
+		PlaceMiniSetRandom(HivePattern30, 50);
+		PlaceMiniSetRandom(HivePattern29, 55);
+		PlaceMiniSetRandom(HivePattern9, 40);
+		PlaceMiniSetRandom(HivePattern10, 45);
+		PlaceMiniSetRandom(HivePattern5, 25);
+		PlaceMiniSetRandom(HivePattern6, 25);
+		PlaceMiniSetRandom(HivePattern7, 25);
+		PlaceMiniSetRandom(HivePattern8, 25);
+		PlaceMiniSetRandom(HivePattern11, 25);
+		PlaceMiniSetRandom(HivePattern12, 25);
+		PlaceMiniSetRandom(HivePattern13, 25);
+		PlaceMiniSetRandom(HivePattern14, 25);
+		PlaceMiniSetRandom(HivePattern15, 25);
+		PlaceMiniSetRandom(HivePattern17, 25);
+		PlaceMiniSetRandom(HivePattern18, 25);
+		PlaceMiniSetRandom(HivePattern19, 25);
+		PlaceMiniSetRandom(HivePattern20, 25);
+		PlaceMiniSetRandom(HivePattern21, 25);
+		PlaceMiniSetRandom(HivePattern23, 25);
+		PlaceMiniSetRandom(HivePattern24, 25);
+		PlaceMiniSetRandom(HivePattern25, 25);
+		PlaceMiniSetRandom(HivePattern26, 25);
+		PlaceMiniSetRandom(HivePattern16, 25);
+		PlaceMiniSetRandom(HivePattern22, 25);
+		PlaceMiniSetRandom(HivePattern27, 25);
+		PlaceMiniSetRandom(HivePattern28, 25);
 	}
 
-	for (j = 0; j < DMAXY; j++) {
-		for (i = 0; i < DMAXX; i++) {
+	for (int j = 0; j < DMAXY; j++) {
+		for (int i = 0; i < DMAXX; i++) {
 			pdungeon[i][j] = dungeon[i][j];
 		}
 	}
@@ -2573,89 +2473,44 @@ static void DRLG_L3(lvl_entry entry)
 	DRLG_Init_Globals();
 }
 
-static void DRLG_L3Pass3()
+void Pass3()
 {
-	int i, j, xx, yy;
-	long v1, v2, v3, v4, lv;
-	WORD *MegaTiles;
-
-	lv = 8 - 1;
-
-	MegaTiles = (WORD *)&pMegaTiles[lv * 8];
-	v1 = SDL_SwapLE16(*(MegaTiles + 0)) + 1;
-	v2 = SDL_SwapLE16(*(MegaTiles + 1)) + 1;
-	v3 = SDL_SwapLE16(*(MegaTiles + 2)) + 1;
-	v4 = SDL_SwapLE16(*(MegaTiles + 3)) + 1;
-
-	for (j = 0; j < MAXDUNY; j += 2) {
-		for (i = 0; i < MAXDUNX; i += 2) {
-			dPiece[i][j] = v1;
-			dPiece[i + 1][j] = v2;
-			dPiece[i][j + 1] = v3;
-			dPiece[i + 1][j + 1] = v4;
-		}
-	}
-
-	yy = 16;
-	for (j = 0; j < DMAXY; j++) {
-		xx = 16;
-		for (i = 0; i < DMAXX; i++) {
-			lv = dungeon[i][j] - 1;
-			if (lv >= 0) {
-				MegaTiles = (WORD *)&pMegaTiles[lv * 8];
-				v1 = SDL_SwapLE16(*(MegaTiles + 0)) + 1;
-				v2 = SDL_SwapLE16(*(MegaTiles + 1)) + 1;
-				v3 = SDL_SwapLE16(*(MegaTiles + 2)) + 1;
-				v4 = SDL_SwapLE16(*(MegaTiles + 3)) + 1;
-			} else {
-				v1 = 0;
-				v2 = 0;
-				v3 = 0;
-				v4 = 0;
-			}
-			dPiece[xx][yy] = v1;
-			dPiece[xx + 1][yy] = v2;
-			dPiece[xx][yy + 1] = v3;
-			dPiece[xx + 1][yy + 1] = v4;
-			xx += 2;
-		}
-		yy += 2;
-	}
+	DRLG_LPass3(8 - 1);
 }
 
-void CreateL3Dungeon(DWORD rseed, lvl_entry entry)
-{
-	int i, j;
+} // namespace
 
+void CreateL3Dungeon(uint32_t rseed, lvl_entry entry)
+{
 	SetRndSeed(rseed);
+
 	dminx = 16;
 	dminy = 16;
 	dmaxx = 96;
 	dmaxy = 96;
+
 	DRLG_InitTrans();
 	DRLG_InitSetPC();
-	DRLG_L3(entry);
-	DRLG_L3Pass3();
+	GenerateLevel(entry);
+	Pass3();
 
 	if (currlevel < 17) {
-		for (j = 0; j < MAXDUNY; j++) {
-			for (i = 0; i < MAXDUNX; i++) {
+		for (int j = 0; j < MAXDUNY; j++) {
+			for (int i = 0; i < MAXDUNX; i++) {
 				if (dPiece[i][j] >= 56 && dPiece[i][j] <= 147) {
-					DoLighting(i, j, 7, -1);
+					DoLighting({ i, j }, 7, -1);
 				} else if (dPiece[i][j] >= 154 && dPiece[i][j] <= 161) {
-					DoLighting(i, j, 7, -1);
-				} else if (dPiece[i][j] == 150) {
-					DoLighting(i, j, 7, -1);
-				} else if (dPiece[i][j] == 152) {
-					DoLighting(i, j, 7, -1);
+					DoLighting({ i, j }, 7, -1);
+				} else if (IsAnyOf(dPiece[i][j], 150, 152)) {
+					DoLighting({ i, j }, 7, -1);
 				}
 			}
 		}
 	} else {
-		for (j = 0; j < MAXDUNY; j++) {
-			for (i = 0; i < MAXDUNX; i++) {
+		for (int j = 0; j < MAXDUNY; j++) {
+			for (int i = 0; i < MAXDUNX; i++) {
 				if (dPiece[i][j] >= 382 && dPiece[i][j] <= 457) {
-					DoLighting(i, j, 9, -1);
+					DoLighting({ i, j }, 9, -1);
 				}
 			}
 		}
@@ -2664,94 +2519,81 @@ void CreateL3Dungeon(DWORD rseed, lvl_entry entry)
 	DRLG_SetPC();
 }
 
-void LoadL3Dungeon(const char *sFileName, int vx, int vy)
+void LoadL3Dungeon(const char *path, int vx, int vy)
 {
-	int i, j, rw, rh;
-	BYTE *pLevelMap, *lm;
-
-	InitL3Dungeon();
 	dminx = 16;
 	dminy = 16;
 	dmaxx = 96;
 	dmaxy = 96;
+
+	InitDungeonFlags();
 	DRLG_InitTrans();
-	pLevelMap = LoadFileInMem(sFileName, nullptr);
 
-	lm = pLevelMap;
-	rw = *lm;
-	lm += 2;
-	rh = *lm;
-	lm += 2;
+	auto dunData = LoadFileInMem<uint16_t>(path);
 
-	for (j = 0; j < rh; j++) {
-		for (i = 0; i < rw; i++) {
-			if (*lm != 0) {
-				dungeon[i][j] = *lm;
-			} else {
-				dungeon[i][j] = 7;
-			}
-			lm += 2;
+	int width = SDL_SwapLE16(dunData[0]);
+	int height = SDL_SwapLE16(dunData[1]);
+
+	const uint16_t *tileLayer = &dunData[2];
+
+	for (int j = 0; j < height; j++) {
+		for (int i = 0; i < width; i++) {
+			uint8_t tileId = SDL_SwapLE16(tileLayer[j * width + i]);
+			dungeon[i][j] = (tileId != 0) ? tileId : 7;
 		}
 	}
-	for (j = 0; j < DMAXY; j++) {
-		for (i = 0; i < DMAXX; i++) {
+
+	for (int j = 0; j < DMAXY; j++) {
+		for (int i = 0; i < DMAXX; i++) { // NOLINT(modernize-loop-convert)
 			if (dungeon[i][j] == 0) {
 				dungeon[i][j] = 8;
 			}
 		}
 	}
 
-	DRLG_L3Pass3();
+	Pass3();
 	DRLG_Init_Globals();
+
 	ViewX = vx;
 	ViewY = vy;
-	SetMapMonsters(pLevelMap, 0, 0);
-	SetMapObjects(pLevelMap, 0, 0);
 
-	for (j = 0; j < MAXDUNY; j++) {
-		for (i = 0; i < MAXDUNX; i++) {
+	SetMapMonsters(dunData.get(), { 0, 0 });
+	SetMapObjects(dunData.get(), 0, 0);
+
+	for (int j = 0; j < MAXDUNY; j++) {
+		for (int i = 0; i < MAXDUNX; i++) {
 			if (dPiece[i][j] >= 56 && dPiece[i][j] <= 147) {
-				DoLighting(i, j, 7, -1);
+				DoLighting({ i, j }, 7, -1);
 			} else if (dPiece[i][j] >= 154 && dPiece[i][j] <= 161) {
-				DoLighting(i, j, 7, -1);
-			} else if (dPiece[i][j] == 150) {
-				DoLighting(i, j, 7, -1);
-			} else if (dPiece[i][j] == 152) {
-				DoLighting(i, j, 7, -1);
+				DoLighting({ i, j }, 7, -1);
+			} else if (IsAnyOf(dPiece[i][j], 150, 152)) {
+				DoLighting({ i, j }, 7, -1);
 			}
 		}
 	}
-
-	mem_free_dbg(pLevelMap);
 }
 
-void LoadPreL3Dungeon(const char *sFileName)
+void LoadPreL3Dungeon(const char *path)
 {
-	int i, j, rw, rh;
-	BYTE *pLevelMap, *lm;
-
-	InitL3Dungeon();
+	InitDungeonFlags();
 	DRLG_InitTrans();
-	pLevelMap = LoadFileInMem(sFileName, nullptr);
 
-	lm = pLevelMap;
-	rw = *lm;
-	lm += 2;
-	rh = *lm;
-	lm += 2;
+	auto dunData = LoadFileInMem<uint16_t>(path);
 
-	for (j = 0; j < rh; j++) {
-		for (i = 0; i < rw; i++) {
-			if (*lm != 0) {
-				dungeon[i][j] = *lm;
-			} else {
-				dungeon[i][j] = 7;
-			}
-			lm += 2;
+	int width = SDL_SwapLE16(dunData[0]);
+	int height = SDL_SwapLE16(dunData[1]);
+
+	const uint16_t *tileLayer = &dunData[2];
+
+	for (int j = 0; j < height; j++) {
+		for (int i = 0; i < width; i++) {
+			uint8_t tileId = SDL_SwapLE16(tileLayer[j * width + i]);
+			dungeon[i][j] = (tileId != 0) ? tileId : 7;
 		}
 	}
-	for (j = 0; j < DMAXY; j++) {
-		for (i = 0; i < DMAXX; i++) {
+
+	for (int j = 0; j < DMAXY; j++) {
+		for (int i = 0; i < DMAXX; i++) { // NOLINT(modernize-loop-convert)
 			if (dungeon[i][j] == 0) {
 				dungeon[i][j] = 8;
 			}
@@ -2759,7 +2601,6 @@ void LoadPreL3Dungeon(const char *sFileName)
 	}
 
 	memcpy(pdungeon, dungeon, sizeof(pdungeon));
-	mem_free_dbg(pLevelMap);
 }
 
 } // namespace devilution

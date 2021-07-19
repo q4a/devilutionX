@@ -5,9 +5,11 @@
  */
 #pragma once
 
-#include <stdint.h>
+#include <cstdint>
 
+#include "engine.h"
 #include "effects.h"
+#include "utils/stdcompat/cstddef.hpp"
 
 namespace devilution {
 
@@ -85,34 +87,53 @@ typedef enum missile_graphic_id : uint8_t {
 	MFILE_BONEDEMON,
 	MFILE_EXORA1,
 	MFILE_EXBL3,
-	MFILE_NONE, // BUGFIX: should be `MFILE_NONE = MFILE_SCBSEXPD+1`, i.e. MFILE_NULL, since there would otherwise be an out-of-bounds in SetMissAnim when accessing misfiledata for any of the missiles that have MFILE_NONE as mFileNum in missiledata. (fixed)
+	MFILE_NONE, // BUGFIX: should be `MFILE_NONE = MFILE_SCBSEXPD+1`, i.e. MFILE_NULL, since there would otherwise be an out-of-bounds in SetMissAnim when accessing MissileSpriteData for any of the missiles that have MFILE_NONE as mFileNum in MissileData. (fixed)
 } missile_graphic_id;
 
+/**
+ * @brief Specifies what if and how movement distribution is applied
+ */
+enum class MissileMovementDistrubution {
+	/**
+      * @brief No movement distribution is calculated. Normally this means the missile doesn't move at all.
+      */
+	Disabled,
+	/**
+      * @brief The missile moves and if it hits a enemey it stops (for example firebolt)
+      */
+	Blockable,
+	/**
+      * @brief The missile moves and even it hits a enemy it keeps moving (for example flame wave)
+      */
+	Unblockable,
+};
+
 typedef struct MissileData {
-	void (*mAddProc)(Sint32, Sint32, Sint32, Sint32, Sint32, Sint32, Sint8, Sint32, Sint32);
-	void (*mProc)(Sint32);
-	Uint8 mName;
+	void (*mAddProc)(int, Point, Point, int, int8_t, int, int);
+	void (*mProc)(int);
+	uint8_t mName;
 	bool mDraw;
-	Uint8 mType;
+	uint8_t mType;
 	missile_resistance mResist;
-	Uint8 mFileNum;
+	uint8_t mFileNum;
 	_sfx_id mlSFX;
 	_sfx_id miSFX;
-} MissileData;
+	MissileMovementDistrubution MovementDistribution;
+} MissileDataStruct;
 
 typedef struct MisFileData {
 	const char *mName;
-	Uint8 mAnimName;
-	Uint8 mAnimFAmt;
-	Sint32 mFlags;
-	Uint8 *mAnimData[16];
-	Uint8 mAnimDelay[16];
-	Uint8 mAnimLen[16];
-	Sint16 mAnimWidth[16];
-	Sint16 mAnimWidth2[16];
-} MisFileData;
+	uint8_t mAnimName;
+	uint8_t mAnimFAmt;
+	uint32_t mFlags;
+	byte *mAnimData[16];
+	uint8_t mAnimDelay[16];
+	uint8_t mAnimLen[16];
+	int16_t mAnimWidth[16];
+	int16_t mAnimWidth2[16];
+} MisFileDataStruct;
 
-extern MissileData missiledata[];
-extern MisFileData misfiledata[];
+extern MissileDataStruct MissileData[];
+extern MisFileDataStruct MissileSpriteData[];
 
 } // namespace devilution

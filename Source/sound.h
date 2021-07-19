@@ -5,15 +5,27 @@
  */
 #pragma once
 
-#include <stdint.h>
+#include <cstdint>
+#include <string>
+#include <memory>
 
 #include "miniwin/miniwin.h"
+
+#ifndef NOSOUND
 #include "utils/soundsample.h"
+#endif
 
 namespace devilution {
 
 #define VOLUME_MIN -1600
 #define VOLUME_MAX 0
+#define VOLUME_STEPS 64
+
+#define ATTENUATION_MIN -6400
+#define ATTENUATION_MAX 0
+
+#define PAN_MIN -6400
+#define PAN_MAX 6400
 
 enum _music_id : uint8_t {
 	TMUSIC_TOWN,
@@ -28,33 +40,37 @@ enum _music_id : uint8_t {
 };
 
 struct TSnd {
-	const char *sound_path;
-	/** Used for streamed audio */
-	HANDLE file_handle;
-	SoundSample *DSB;
+#ifndef NOSOUND
+	SoundSample DSB;
 	Uint32 start_tc;
+
+	bool isPlaying()
+	{
+		return DSB.IsPlaying();
+	}
+
+	~TSnd();
+#endif
 };
 
 extern bool gbSndInited;
-
-void snd_update(bool bStopAll);
+void ClearDuplicateSounds();
 void snd_stop_snd(TSnd *pSnd);
-bool snd_playing(TSnd *pSnd);
 void snd_play_snd(TSnd *pSnd, int lVolume, int lPan);
-TSnd *sound_file_load(const char *path, bool stream = false);
-void sound_file_cleanup(TSnd *sound_file);
+std::unique_ptr<TSnd> sound_file_load(const char *path, bool stream = false);
 void snd_init();
-void sound_cleanup();
+void snd_deinit();
 void music_stop();
 void music_start(uint8_t nTrack);
 void sound_disable_music(bool disable);
 int sound_get_or_set_music_volume(int volume);
 int sound_get_or_set_sound_volume(int volume);
+void music_mute();
+void music_unmute();
 
 /* data */
 
 extern bool gbMusicOn;
 extern bool gbSoundOn;
-extern bool gbDupSounds;
 
 } // namespace devilution

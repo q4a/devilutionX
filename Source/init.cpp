@@ -12,6 +12,8 @@
 #include "dx.h"
 #include "pfile.h"
 #include "storm/storm.h"
+#include "utils/language.h"
+#include "utils/log.hpp"
 #include "utils/paths.h"
 #include "utils/ui_fwd.h"
 
@@ -51,23 +53,23 @@ HANDLE devilutionx_mpq;
 
 namespace {
 
-HANDLE init_test_access(const std::vector<std::string> &paths, const char *mpq_name)
+HANDLE LoadMPQ(const std::vector<std::string> &paths, const char *mpqName)
 {
 	HANDLE archive;
-	std::string mpq_abspath;
+	std::string mpqAbsPath;
 	for (const auto &path : paths) {
-		mpq_abspath = path + mpq_name;
-		if (SFileOpenArchive(mpq_abspath.c_str(), 0, MPQ_OPEN_READ_ONLY, &archive)) {
-			SDL_LogVerbose(SDL_LOG_CATEGORY_APPLICATION, "  Found: %s in %s", mpq_name, path.c_str());
+		mpqAbsPath = path + mpqName;
+		if (SFileOpenArchive(mpqAbsPath.c_str(), 0, MPQ_OPEN_READ_ONLY, &archive)) {
+			LogVerbose("  Found: {} in {}", mpqName, path);
 			SFileSetBasePath(path.c_str());
 			return archive;
 		}
 		if (SErrGetLastError() != STORM_ERROR_FILE_NOT_FOUND) {
-			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Open error %u: %s", SErrGetLastError(), mpq_abspath.c_str());
+			LogError("Open error {}: {}", SErrGetLastError(), mpqAbsPath);
 		}
 	}
 	if (SErrGetLastError() == STORM_ERROR_FILE_NOT_FOUND) {
-		SDL_LogVerbose(SDL_LOG_CATEGORY_APPLICATION, "Missing: %s", mpq_name);
+		LogVerbose("Missing: {}", mpqName);
 	}
 
 	return nullptr;
@@ -75,62 +77,57 @@ HANDLE init_test_access(const std::vector<std::string> &paths, const char *mpq_n
 
 } // namespace
 
-/* data */
-
-char gszVersionNumber[64] = "internal version unknown";
-char gszProductName[64] = "DevilutionX vUnknown";
-
 void init_cleanup()
 {
 	if (gbIsMultiplayer && gbRunGame) {
-		pfile_write_hero(/*write_game_data=*/false, /*clear_tables=*/true);
+		pfile_write_hero(/*writeGameData=*/false, /*clearTables=*/true);
 	}
 
-	if (spawn_mpq) {
+	if (spawn_mpq != nullptr) {
 		SFileCloseArchive(spawn_mpq);
 		spawn_mpq = nullptr;
 	}
-	if (diabdat_mpq) {
+	if (diabdat_mpq != nullptr) {
 		SFileCloseArchive(diabdat_mpq);
 		diabdat_mpq = nullptr;
 	}
-	if (patch_rt_mpq) {
+	if (patch_rt_mpq != nullptr) {
 		SFileCloseArchive(patch_rt_mpq);
 		patch_rt_mpq = nullptr;
 	}
-	if (hellfire_mpq) {
+	if (hellfire_mpq != nullptr) {
 		SFileCloseArchive(hellfire_mpq);
 		hellfire_mpq = nullptr;
 	}
-	if (hfmonk_mpq) {
+	if (hfmonk_mpq != nullptr) {
 		SFileCloseArchive(hfmonk_mpq);
 		hfmonk_mpq = nullptr;
 	}
-	if (hfbard_mpq) {
+	if (hfbard_mpq != nullptr) {
 		SFileCloseArchive(hfbard_mpq);
 		hfbard_mpq = nullptr;
 	}
-	if (hfbarb_mpq) {
+	if (hfbarb_mpq != nullptr) {
 		SFileCloseArchive(hfbarb_mpq);
 		hfbarb_mpq = nullptr;
 	}
-	if (hfmusic_mpq) {
+	if (hfmusic_mpq != nullptr) {
 		SFileCloseArchive(hfmusic_mpq);
 		hfmusic_mpq = nullptr;
 	}
-	if (hfvoice_mpq) {
+	if (hfvoice_mpq != nullptr) {
 		SFileCloseArchive(hfvoice_mpq);
 		hfvoice_mpq = nullptr;
 	}
-	if (hfopt1_mpq) {
+	if (hfopt1_mpq != nullptr) {
 		SFileCloseArchive(hfopt1_mpq);
 		hfopt1_mpq = nullptr;
 	}
-	if (hfopt2_mpq) {
+	if (hfopt2_mpq != nullptr) {
 		SFileCloseArchive(hfopt2_mpq);
 		hfopt2_mpq = nullptr;
 	}
-	if (devilutionx_mpq) {
+	if (devilutionx_mpq != nullptr) {
 		SFileCloseArchive(patch_rt_mpq);
 		patch_rt_mpq = nullptr;
 	}
@@ -138,26 +135,29 @@ void init_cleanup()
 	NetClose();
 }
 
-static void init_get_file_info()
-{
-	snprintf(gszProductName, sizeof(gszProductName) / sizeof(char), "%s v%s", PROJECT_NAME, PROJECT_VERSION);
-	snprintf(gszVersionNumber, sizeof(gszVersionNumber) / sizeof(char), "version %s", PROJECT_VERSION);
-}
-
 void init_archives()
 {
-	init_get_file_info();
-
 	std::vector<std::string> paths;
 	paths.reserve(5);
-	paths.push_back(GetBasePath());
-	paths.push_back(GetPrefPath());
+#ifdef __ANDROID__
+	paths.push_back(std::string(getenv("EXTERNAL_STORAGE")) + "/devilutionx/");
+#else
+	paths.push_back(paths::BasePath());
+#endif
+	paths.push_back(paths::PrefPath());
 	if (paths[0] == paths[1])
 		paths.pop_back();
 
-#ifdef __linux__
+#ifdef __ANDROID__
+	if (getenv("SECONDARY_STORAGE") != nullptr)
+		paths.emplace_back(std::string(getenv("SECONDARY_STORAGE")) + "/devilutionx/");
+	if (getenv("EXTERNAL_SDCARD_STORAGE") != nullptr)
+		paths.emplace_back(std::string(getenv("EXTERNAL_SDCARD_STORAGE")) + "/devilutionx/");
+#elif defined(__linux__)
 	paths.emplace_back("/usr/share/diasurgical/devilutionx/");
 	paths.emplace_back("/usr/local/share/diasurgical/devilutionx/");
+#elif defined(__3DS__)
+	paths.emplace_back("romfs:/");
 #endif
 
 	paths.emplace_back(""); // PWD
@@ -171,57 +171,56 @@ void init_archives()
 			message.append(paths[i]);
 			message += '\'';
 		}
-		SDL_LogVerbose(SDL_LOG_CATEGORY_APPLICATION,
-		    "MPQ search paths%s", message.c_str());
+		LogVerbose("MPQ search paths:{}", message);
 	}
 
-	diabdat_mpq = init_test_access(paths, "DIABDAT.MPQ");
+	diabdat_mpq = LoadMPQ(paths, "DIABDAT.MPQ");
 	if (diabdat_mpq == nullptr) {
 		// DIABDAT.MPQ is uppercase on the original CD and the GOG version.
-		diabdat_mpq = init_test_access(paths, "diabdat.mpq");
+		diabdat_mpq = LoadMPQ(paths, "diabdat.mpq");
 	}
 
 	if (diabdat_mpq == nullptr) {
-		spawn_mpq = init_test_access(paths, "spawn.mpq");
+		spawn_mpq = LoadMPQ(paths, "spawn.mpq");
 		if (spawn_mpq != nullptr)
 			gbIsSpawn = true;
 	}
 	HANDLE fh = nullptr;
 	if (!SFileOpenFile("ui_art\\title.pcx", &fh))
 		InsertCDDlg();
-	SFileCloseFile(fh);
+	SFileCloseFileThreadSafe(fh);
 
-	patch_rt_mpq = init_test_access(paths, "patch_rt.mpq");
+	patch_rt_mpq = LoadMPQ(paths, "patch_rt.mpq");
 	if (patch_rt_mpq == nullptr)
-		patch_rt_mpq = init_test_access(paths, "patch_sh.mpq");
+		patch_rt_mpq = LoadMPQ(paths, "patch_sh.mpq");
 
-	hellfire_mpq = init_test_access(paths, "hellfire.mpq");
+	hellfire_mpq = LoadMPQ(paths, "hellfire.mpq");
 	if (hellfire_mpq != nullptr)
 		gbIsHellfire = true;
-	hfmonk_mpq = init_test_access(paths, "hfmonk.mpq");
-	hfbard_mpq = init_test_access(paths, "hfbard.mpq");
+	hfmonk_mpq = LoadMPQ(paths, "hfmonk.mpq");
+	hfbard_mpq = LoadMPQ(paths, "hfbard.mpq");
 	if (hfbard_mpq != nullptr)
 		gbBard = true;
-	hfbarb_mpq = init_test_access(paths, "hfbarb.mpq");
+	hfbarb_mpq = LoadMPQ(paths, "hfbarb.mpq");
 	if (hfbarb_mpq != nullptr)
 		gbBarbarian = true;
-	hfmusic_mpq = init_test_access(paths, "hfmusic.mpq");
-	hfvoice_mpq = init_test_access(paths, "hfvoice.mpq");
-	hfopt1_mpq = init_test_access(paths, "hfopt1.mpq");
-	hfopt2_mpq = init_test_access(paths, "hfopt2.mpq");
+	hfmusic_mpq = LoadMPQ(paths, "hfmusic.mpq");
+	hfvoice_mpq = LoadMPQ(paths, "hfvoice.mpq");
+	hfopt1_mpq = LoadMPQ(paths, "hfopt1.mpq");
+	hfopt2_mpq = LoadMPQ(paths, "hfopt2.mpq");
 
 	if (gbIsHellfire && (hfmonk_mpq == nullptr || hfmusic_mpq == nullptr || hfvoice_mpq == nullptr)) {
-		UiErrorOkDialog("Some Hellfire MPQs are missing", "Not all Hellfire MPQs were found.\nPlease copy all the hf*.mpq files.");
+		UiErrorOkDialog(_("Some Hellfire MPQs are missing"), _("Not all Hellfire MPQs were found.\nPlease copy all the hf*.mpq files."));
 		app_fatal(nullptr);
 	}
 
-	devilutionx_mpq = init_test_access(paths, "devilutionx.mpq");
+	devilutionx_mpq = LoadMPQ(paths, "devilutionx.mpq");
 }
 
 void init_create_window()
 {
 	if (!SpawnWindow(PROJECT_NAME))
-		app_fatal("Unable to create main window");
+		app_fatal("%s", _("Unable to create main window"));
 	dx_init();
 	gbActive = true;
 #ifndef USE_SDL1
@@ -229,25 +228,24 @@ void init_create_window()
 #endif
 }
 
-void MainWndProc(UINT Msg)
+void MainWndProc(uint32_t msg)
 {
-	switch (Msg) {
+	switch (msg) {
 	case DVL_WM_PAINT:
 		force_redraw = 255;
 		break;
 	case DVL_WM_QUERYENDSESSION:
 		diablo_quit(0);
-		break;
 	}
 }
 
-WNDPROC SetWindowProc(WNDPROC NewProc)
+WNDPROC SetWindowProc(WNDPROC newProc)
 {
-	WNDPROC OldProc;
+	WNDPROC oldProc;
 
-	OldProc = CurrentProc;
-	CurrentProc = NewProc;
-	return OldProc;
+	oldProc = CurrentProc;
+	CurrentProc = newProc;
+	return oldProc;
 }
 
 } // namespace devilution

@@ -5,27 +5,15 @@
  */
 #pragma once
 
-#include <SDL.h>
+#include <cstdint>
+#include <memory>
+
+#include "utils/stdcompat/cstddef.hpp"
 
 namespace devilution {
 
-#pragma pack(push, 1)
-struct TMsgHdr {
-	struct TMsg *pNext;
-	Sint32 dwTime;
-	Uint8 bLen;
-};
-
-struct TMsg {
-	TMsgHdr hdr;
-	// this is actually alignment padding, but the message body is appended to the struct
-	// so it's convenient to use byte-alignment and name it "body"
-	Uint8 body[3];
-};
-#pragma pack(pop)
-
-int tmsg_get(Uint8 *pbMsg);
-void tmsg_add(Uint8 *pbMsg, Uint8 bLen);
+uint8_t tmsg_get(std::unique_ptr<byte[]> *msg);
+void tmsg_add(byte *msg, uint8_t bLen);
 void tmsg_start();
 void tmsg_cleanup();
 

@@ -1,6 +1,7 @@
 #include "dvlnet/packet.h"
 
-namespace devilution::net {
+namespace devilution {
+namespace net {
 
 #ifndef NONET
 static constexpr bool DisableEncryption = false;
@@ -63,35 +64,35 @@ void CheckPacketTypeOneOf(std::initializer_list<packet_type> expectedTypes, std:
 
 } // namespace
 
-const buffer_t &packet::data()
+const buffer_t &packet::Data()
 {
 	if (!have_decrypted || !have_encrypted)
 		ABORT();
 	return encrypted_buffer;
 }
 
-packet_type packet::type()
+packet_type packet::Type()
 {
 	if (!have_decrypted)
 		ABORT();
 	return m_type;
 }
 
-plr_t packet::src()
+plr_t packet::Source() const
 {
 	if (!have_decrypted)
 		ABORT();
 	return m_src;
 }
 
-plr_t packet::dest()
+plr_t packet::Destination() const
 {
 	if (!have_decrypted)
 		ABORT();
 	return m_dest;
 }
 
-const buffer_t &packet::message()
+const buffer_t &packet::Message()
 {
 	if (!have_decrypted)
 		ABORT();
@@ -99,7 +100,7 @@ const buffer_t &packet::message()
 	return m_message;
 }
 
-turn_t packet::turn()
+turn_t packet::Turn()
 {
 	if (!have_decrypted)
 		ABORT();
@@ -107,7 +108,7 @@ turn_t packet::turn()
 	return m_turn;
 }
 
-cookie_t packet::cookie()
+cookie_t packet::Cookie()
 {
 	if (!have_decrypted)
 		ABORT();
@@ -115,7 +116,7 @@ cookie_t packet::cookie()
 	return m_cookie;
 }
 
-plr_t packet::newplr()
+plr_t packet::NewPlayer()
 {
 	if (!have_decrypted)
 		ABORT();
@@ -123,7 +124,7 @@ plr_t packet::newplr()
 	return m_newplr;
 }
 
-const buffer_t &packet::info()
+const buffer_t &packet::Info()
 {
 	if (!have_decrypted)
 		ABORT();
@@ -131,7 +132,7 @@ const buffer_t &packet::info()
 	return m_info;
 }
 
-leaveinfo_t packet::leaveinfo()
+leaveinfo_t packet::LeaveInfo()
 {
 	if (!have_decrypted)
 		ABORT();
@@ -139,7 +140,7 @@ leaveinfo_t packet::leaveinfo()
 	return m_leaveinfo;
 }
 
-void packet_in::create(buffer_t buf)
+void packet_in::Create(buffer_t buf)
 {
 	if (have_encrypted || have_decrypted)
 		ABORT();
@@ -147,7 +148,7 @@ void packet_in::create(buffer_t buf)
 	have_encrypted = true;
 }
 
-void packet_in::decrypt()
+void packet_in::Decrypt()
 {
 	if (!have_encrypted)
 		ABORT();
@@ -163,13 +164,13 @@ void packet_in::decrypt()
 		    - crypto_secretbox_NONCEBYTES
 		    - crypto_secretbox_MACBYTES);
 		decrypted_buffer.resize(pktlen);
-		if (crypto_secretbox_open_easy(decrypted_buffer.data(),
-		        encrypted_buffer.data()
-		            + crypto_secretbox_NONCEBYTES,
-		        encrypted_buffer.size()
-		            - crypto_secretbox_NONCEBYTES,
-		        encrypted_buffer.data(),
-		        key.data()))
+		int status = crypto_secretbox_open_easy(
+		    decrypted_buffer.data(),
+		    encrypted_buffer.data() + crypto_secretbox_NONCEBYTES,
+		    encrypted_buffer.size() - crypto_secretbox_NONCEBYTES,
+		    encrypted_buffer.data(),
+		    key.data());
+		if (status != 0)
 			throw packet_exception();
 	} else
 #endif
@@ -184,7 +185,7 @@ void packet_in::decrypt()
 	have_decrypted = true;
 }
 
-void packet_out::encrypt()
+void packet_out::Encrypt()
 {
 	if (!have_decrypted)
 		ABORT();
@@ -201,13 +202,13 @@ void packet_out::encrypt()
 		encrypted_buffer.insert(encrypted_buffer.end(),
 		    crypto_secretbox_MACBYTES, 0);
 		randombytes_buf(encrypted_buffer.data(), crypto_secretbox_NONCEBYTES);
-		if (crypto_secretbox_easy(encrypted_buffer.data()
-		            + crypto_secretbox_NONCEBYTES,
-		        encrypted_buffer.data()
-		            + crypto_secretbox_NONCEBYTES,
-		        lenCleartext,
-		        encrypted_buffer.data(),
-		        key.data()))
+		int status = crypto_secretbox_easy(
+		    encrypted_buffer.data() + crypto_secretbox_NONCEBYTES,
+		    encrypted_buffer.data() + crypto_secretbox_NONCEBYTES,
+		    lenCleartext,
+		    encrypted_buffer.data(),
+		    key.data());
+		if (status != 0)
 			ABORT();
 	}
 #endif
@@ -223,14 +224,19 @@ packet_factory::packet_factory(std::string pw)
 	pw.resize(std::max<std::size_t>(pw.size(), crypto_pwhash_argon2id_PASSWD_MIN), 0);
 	std::string salt("W9bE9dQgVaeybwr2");
 	salt.resize(crypto_pwhash_argon2id_SALTBYTES, 0);
-	if (crypto_pwhash(key.data(), crypto_secretbox_KEYBYTES,
-	        pw.data(), pw.size(),
-	        reinterpret_cast<const unsigned char *>(salt.data()),
-	        crypto_pwhash_argon2id_OPSLIMIT_INTERACTIVE,
-	        crypto_pwhash_argon2id_MEMLIMIT_INTERACTIVE,
-	        crypto_pwhash_ALG_ARGON2ID13))
+	int status = crypto_pwhash(
+	    key.data(),
+	    crypto_secretbox_KEYBYTES,
+	    pw.data(),
+	    pw.size(),
+	    reinterpret_cast<const unsigned char *>(salt.data()),
+	    3 * crypto_pwhash_argon2id_OPSLIMIT_MIN,
+	    2 * crypto_pwhash_argon2id_MEMLIMIT_MIN,
+	    crypto_pwhash_ALG_ARGON2ID13);
+	if (status != 0)
 		ABORT();
 #endif
 }
 
-} // namespace devilution::net
+} // namespace net
+} // namespace devilution

@@ -3,18 +3,20 @@
  *
  * Implementation of the screenshot function.
  */
+#include <cstdint>
 #include <fstream>
 
 #include "DiabloUI/diabloui.h"
 #include "dx.h"
 #include "palette.h"
-#include "render.h"
 #include "storm/storm.h"
 #include "utils/file_util.h"
+#include "utils/log.hpp"
 #include "utils/paths.h"
 #include "utils/ui_fwd.h"
 
 namespace devilution {
+namespace {
 
 /**
  * @brief Write the PCX-file header
@@ -23,7 +25,7 @@ namespace devilution {
  * @param out File stream to write to
  * @return True on success
  */
-static bool CaptureHdr(short width, short height, std::ofstream *out)
+bool CaptureHdr(int16_t width, int16_t height, std::ofstream *out)
 {
 	PCXHeader buffer;
 
@@ -44,18 +46,17 @@ static bool CaptureHdr(short width, short height, std::ofstream *out)
 }
 
 /**
- * @brief Write the current ingame palette to the PCX file
+ * @brief Write the current in-game palette to the PCX file
  * @param palette Current palette
  * @param out File stream for the PCX file.
  * @return True if successful, else false
  */
-static bool CapturePal(SDL_Color *palette, std::ofstream *out)
+bool CapturePal(SDL_Color *palette, std::ofstream *out)
 {
 	BYTE pcxPalette[1 + 256 * 3];
-	int i;
 
 	pcxPalette[0] = 12;
-	for (i = 0; i < 256; i++) {
+	for (int i = 0; i < 256; i++) {
 		pcxPalette[1 + 3 * i + 0] = palette[i].r;
 		pcxPalette[1 + 3 * i + 1] = palette[i].g;
 		pcxPalette[1 + 3 * i + 2] = palette[i].b;
@@ -73,7 +74,7 @@ static bool CapturePal(SDL_Color *palette, std::ofstream *out)
 
  * @return Output buffer
  */
-static BYTE *CaptureEnc(BYTE *src, BYTE *dst, int width)
+BYTE *CaptureEnc(BYTE *src, BYTE *dst, int width)
 {
 	int rleLength;
 
@@ -112,31 +113,30 @@ static BYTE *CaptureEnc(BYTE *src, BYTE *dst, int width)
  * @param buf Buffer
  * @return True if successful, else false
  */
-static bool CapturePix(CelOutputBuffer buf, std::ofstream *out)
+bool CapturePix(const Surface &buf, std::ofstream *out)
 {
 	int width = buf.w();
-	BYTE *pBuffer = (BYTE *)DiabloAllocPtr(2 * width);
+	std::unique_ptr<BYTE[]> pBuffer { new BYTE[2 * width] };
 	BYTE *pixels = buf.begin();
 	for (int height = buf.h(); height > 0; height--) {
-		const BYTE *pBufferEnd = CaptureEnc(pixels, pBuffer, width);
+		const BYTE *pBufferEnd = CaptureEnc(pixels, pBuffer.get(), width);
 		pixels += buf.pitch();
-		out->write(reinterpret_cast<const char *>(pBuffer), pBufferEnd - pBuffer);
+		out->write(reinterpret_cast<const char *>(pBuffer.get()), pBufferEnd - pBuffer.get());
 		if (out->fail())
 			return false;
 	}
-	mem_free_dbg(pBuffer);
 	return true;
 }
 
 /**
  * Returns a pointer because in GCC < 5 ofstream itself is not moveable due to a bug.
  */
-static std::ofstream *CaptureFile(std::string *dstPath)
+std::ofstream *CaptureFile(std::string *dstPath)
 {
 	char filename[sizeof("screen00.PCX") / sizeof(char)];
 	for (int i = 0; i <= 99; ++i) {
 		snprintf(filename, sizeof(filename) / sizeof(char), "screen%02d.PCX", i);
-		*dstPath = GetPrefPath() + filename;
+		*dstPath = paths::PrefPath() + filename;
 		if (!FileExists(dstPath->c_str())) {
 			return new std::ofstream(*dstPath, std::ios::binary | std::ios::trunc);
 		}
@@ -147,22 +147,17 @@ static std::ofstream *CaptureFile(std::string *dstPath)
 /**
  * @brief Make a red version of the given palette and apply it to the screen.
  */
-static void RedPalette()
+void RedPalette()
 {
 	for (int i = 0; i < 255; i++) {
 		system_palette[i].g = 0;
 		system_palette[i].b = 0;
 	}
 	palette_update();
-	SDL_Rect srcRect {
-		BUFFER_BORDER_LEFT,
-		BUFFER_BORDER_TOP,
-		gnScreenWidth,
-		gnScreenHeight,
-	};
-	BltFast(&srcRect, nullptr);
+	BltFast(nullptr, nullptr);
 	RenderPresent();
 }
+} // namespace
 
 /**
  * @brief Save the current screen to a screen??.PCX (00-99) in file if available, then make the screen red for 200ms.
@@ -182,7 +177,7 @@ void CaptureScreen()
 	RedPalette();
 
 	lock_buf(2);
-	CelOutputBuffer buf = GlobalBackBuffer();
+	const Surface &buf = GlobalBackBuffer();
 	success = CaptureHdr(buf.w(), buf.h(), outStream);
 	if (success) {
 		success = CapturePix(buf, outStream);
@@ -194,10 +189,10 @@ void CaptureScreen()
 	outStream->close();
 
 	if (!success) {
-		SDL_Log("Failed to save screenshot at %s", fileName.c_str());
+		Log("Failed to save screenshot at {}", fileName);
 		RemoveFile(fileName.c_str());
 	} else {
-		SDL_Log("Screenshot saved at %s", fileName.c_str());
+		Log("Screenshot saved at {}", fileName);
 	}
 	SDL_Delay(300);
 	for (int i = 0; i < 256; i++) {

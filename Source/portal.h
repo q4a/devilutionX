@@ -5,6 +5,7 @@
  */
 #pragma once
 
+#include "engine/point.hpp"
 #include "gendung.h"
 
 namespace devilution {
@@ -13,14 +14,13 @@ namespace devilution {
 
 struct PortalStruct {
 	bool open;
-	Sint32 x;
-	Sint32 y;
-	Sint32 level;
+	Point position;
+	int level;
 	dungeon_type ltype;
 	bool setlvl;
 };
 
-extern PortalStruct portal[MAXPORTAL];
+extern PortalStruct Portals[MAXPORTAL];
 
 void InitPortals();
 void SetPortalStats(int i, bool o, int x, int y, int lvl, dungeon_type lvltype);

@@ -1,5 +1,9 @@
 #pragma once
 
+#include <cstdint>
+
+#include <SDL_version.h>
+
 #include "pack.h"
 
 namespace devilution {
@@ -18,20 +22,29 @@ struct HellfireOptions {
 
 struct AudioOptions {
 	/** @brief Movie and SFX volume. */
-	Sint32 nSoundVolume;
+	int nSoundVolume;
 	/** @brief Music volume. */
-	Sint32 nMusicVolume;
+	int nMusicVolume;
 	/** @brief Player emits sound when walking. */
 	bool bWalkingSound;
 	/** @brief Automatically equipping items on pickup emits the equipment sound. */
 	bool bAutoEquipSound;
+
+	/** @brief Output sample rate (Hz) */
+	std::uint32_t nSampleRate;
+	/** @brief The number of output channels (1 or 2) */
+	std::uint8_t nChannels;
+	/** @brief Buffer size (number of frames per channel) */
+	std::uint32_t nBufferSize;
+	/** @brief Quality of the resampler, from 0 (lowest) to 10 (highest) */
+	std::uint8_t nResamplingQuality;
 };
 
 struct GraphicsOptions {
 	/** @brief Render width. */
-	Sint32 nWidth;
+	int nWidth;
 	/** @brief Render height. */
-	Sint32 nHeight;
+	int nHeight;
 	/** @brief Run in fullscreen or windowed mode. */
 	bool bFullscreen;
 	/** @brief Scale the image after rendering. */
@@ -47,16 +60,26 @@ struct GraphicsOptions {
 	/** @brief Use blended transparency rather than stippled. */
 	bool bBlendedTransparancy;
 	/** @brief Gamma correction level. */
-	Sint32 nGammaCorrection;
+	int nGammaCorrection;
 	/** @brief Enable color cycling animations. */
 	bool bColorCycling;
+#if SDL_VERSION_ATLEAST(2, 0, 0)
+	/** @brief Use a hardware cursor (SDL2 only). */
+	bool bHardwareCursor;
+	/** @brief Use a hardware cursor for items. */
+	bool bHardwareCursorForItems;
+	/** @brief Maximum width / height for the hardware cursor. Larger cursors fall back to software. */
+	int nHardwareCursorMaxSize;
+#endif
 	/** @brief Enable FPS Limit. */
 	bool bFPSLimit;
+	/** @brief Show FPS, even without the -f command line flag. */
+	bool bShowFPS;
 };
 
 struct GameplayOptions {
 	/** @brief Gameplay ticks per second. */
-	Sint32 nTickRate;
+	int nTickRate;
 	/** @brief Enable double walk speed when in town. */
 	bool bRunInTown;
 	/** @brief Do not let the mouse leave the application window. */
@@ -118,12 +141,17 @@ struct NetworkOptions {
 	/** @brief Most recently entered Hostname in join dialog. */
 	char szPreviousHost[129];
 	/** @brief What network port to use. */
-	Uint16 nPort;
+	uint16_t nPort;
 };
 
 struct ChatOptions {
 	/** @brief Quick chat messages. */
-	char szHotKeyMsgs[4][MAX_SEND_STR_LEN];
+	char szHotKeyMsgs[QUICK_MESSAGE_OPTIONS][MAX_SEND_STR_LEN];
+};
+
+struct LanguageOptions {
+	/** @brief Language code (IETF) for text. */
+	char szCode[5];
 };
 
 struct Options {
@@ -135,8 +163,16 @@ struct Options {
 	ControllerOptions Controller;
 	NetworkOptions Network;
 	ChatOptions Chat;
+	LanguageOptions Language;
 };
 
+bool GetIniValue(const char *sectionName, const char *keyName, char *string, int stringSize, const char *defaultString = "");
+void SetIniValue(const char *sectionName, const char *keyName, const char *value, int len = 0);
+
 extern Options sgOptions;
+extern bool sbWasOptionsLoaded;
+
+void SaveOptions();
+void LoadOptions();
 
 } // namespace devilution

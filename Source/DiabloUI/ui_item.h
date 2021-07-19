@@ -24,17 +24,21 @@ enum UiType : uint8_t {
 
 enum UiFlags : uint16_t {
 	// clang-format off
-	UIS_SMALL    = 1 << 0,
-	UIS_MED      = 1 << 1,
-	UIS_BIG      = 1 << 2,
-	UIS_HUGE     = 1 << 3,
-	UIS_CENTER   = 1 << 4,
-	UIS_RIGHT    = 1 << 5,
-	UIS_VCENTER  = 1 << 6,
-	UIS_SILVER   = 1 << 7,
-	UIS_GOLD     = 1 << 8,
-	UIS_DISABLED = 1 << 9,
-	UIS_HIDDEN   = 1 << 10,
+	UIS_SMALL       = 1 << 0,
+	UIS_MED         = 1 << 1,
+	UIS_BIG         = 1 << 2,
+	UIS_HUGE        = 1 << 3,
+	UIS_CENTER      = 1 << 4,
+	UIS_RIGHT       = 1 << 5,
+	UIS_VCENTER     = 1 << 6,
+	UIS_SILVER      = 1 << 7,
+	UIS_GOLD        = 1 << 8,
+	UIS_RED         = 1 << 9,
+	UIS_BLUE        = 1 << 10,
+	UIS_BLACK       = 1 << 11,
+	UIS_DISABLED    = 1 << 12,
+	UIS_HIDDEN      = 1 << 13,
+	UIS_FIT_SPACING = 1 << 14,
 	// clang-format on
 };
 
@@ -131,15 +135,30 @@ class UiArtText : public UiItemBase {
 public:
 	UiArtText(const char *text, SDL_Rect rect, int flags = 0)
 	    : UiItemBase(rect, flags)
+	    , m_text(text)
 	{
 		m_type = UI_ART_TEXT;
-		m_text = text;
 	};
+
+	UiArtText(const char **ptext, SDL_Rect rect, int flags = 0)
+	    : UiItemBase(rect, flags)
+	    , m_ptext(ptext)
+	{
+		m_type = UI_ART_TEXT;
+	};
+
+	const char *text() const
+	{
+		if (m_text != nullptr)
+			return m_text;
+		return *m_ptext;
+	}
 
 	~UiArtText() {};
 
-	//private:
-	const char *m_text;
+private:
+	const char *m_text = nullptr;
+	const char **m_ptext = nullptr;
 };
 
 //=============================================================================
@@ -181,15 +200,17 @@ public:
 
 class UiEdit : public UiItemBase {
 public:
-	UiEdit(char *value, std::size_t max_length, SDL_Rect rect, int flags = 0)
+	UiEdit(const char *hint, char *value, std::size_t max_length, SDL_Rect rect, int flags = 0)
 	    : UiItemBase(rect, flags)
 	{
 		m_type = UI_EDIT;
+		m_hint = hint;
 		m_value = value;
 		m_max_length = max_length;
 	}
 
 	//private:
+	const char *m_hint;
 	char *m_value;
 	std::size_t m_max_length;
 };
@@ -287,15 +308,16 @@ public:
 	int m_value;
 };
 
-typedef std::vector<UiListItem *> vUiListItem;
+typedef std::vector<std::unique_ptr<UiListItem>> vUiListItem;
 
 class UiList : public UiItemBase {
 public:
-	UiList(vUiListItem vItems, Sint16 x, Sint16 y, Uint16 item_width, Uint16 item_height, int flags = 0)
-	    : UiItemBase(x, y, item_width, item_height * vItems.size(), flags)
+	UiList(const vUiListItem &vItems, Sint16 x, Sint16 y, Uint16 item_width, Uint16 item_height, int flags = 0)
+	    : UiItemBase(x, y, item_width, static_cast<Uint16>(item_height * vItems.size()), flags)
 	{
 		m_type = UI_LIST;
-		m_vecItems = vItems;
+		for (auto &item : vItems)
+			m_vecItems.push_back(item.get());
 		m_x = x;
 		m_y = y;
 		m_width = item_width;
@@ -318,7 +340,7 @@ public:
 	int indexAt(Sint16 y) const
 	{
 		ASSERT(y >= m_rect.y);
-		const std::size_t index = (y - m_rect.y) / m_height;
+		const size_t index = (y - m_rect.y) / m_height;
 		ASSERT(index < m_vecItems.size());
 		return index;
 	}

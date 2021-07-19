@@ -3,6 +3,7 @@
 #include <cstddef>
 
 #include "controls/controller_motion.h"
+#include "utils/log.hpp"
 #include "utils/stubs.h"
 
 namespace devilution {
@@ -177,7 +178,8 @@ int Joystick::ToSdlJoyButton(ControllerButton button)
 	}
 }
 
-bool Joystick::IsHatButtonPressed(ControllerButton button)
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static): Not static if joystick mappings are defined.
+bool Joystick::IsHatButtonPressed(ControllerButton button) const
 {
 	switch (button) {
 #if defined(JOY_HAT_DPAD_UP_HAT) && defined(JOY_HAT_DPAD_UP)
@@ -243,7 +245,6 @@ bool Joystick::ProcessAxisMotion(const SDL_Event &event)
 	default:
 		return false;
 	}
-	return true;
 }
 
 void Joystick::Add(int deviceIndex)
@@ -251,11 +252,11 @@ void Joystick::Add(int deviceIndex)
 	if (SDL_NumJoysticks() <= deviceIndex)
 		return;
 	Joystick result;
-	SDL_Log("Adding joystick %d: %s", deviceIndex,
+	Log("Adding joystick {}: {}", deviceIndex,
 	    SDL_JoystickNameForIndex(deviceIndex));
 	result.sdl_joystick_ = SDL_JoystickOpen(deviceIndex);
 	if (result.sdl_joystick_ == nullptr) {
-		SDL_Log("%s", SDL_GetError());
+		Log("{}", SDL_GetError());
 		SDL_ClearError();
 		return;
 	}
@@ -269,7 +270,7 @@ void Joystick::Add(int deviceIndex)
 void Joystick::Remove(SDL_JoystickID instanceId)
 {
 #ifndef USE_SDL1
-	SDL_Log("Removing joystick (instance id: %d)", instanceId);
+	Log("Removing joystick (instance id: {})", instanceId);
 	for (std::size_t i = 0; i < joysticks_->size(); ++i) {
 		const Joystick &joystick = (*joysticks_)[i];
 		if (joystick.instance_id_ != instanceId)
@@ -278,7 +279,7 @@ void Joystick::Remove(SDL_JoystickID instanceId)
 		sgbControllerActive = !joysticks_->empty();
 		return;
 	}
-	SDL_Log("Joystick not found with instance id: %d", instanceId);
+	Log("Joystick not found with instance id: {}", instanceId);
 #endif
 }
 
@@ -308,7 +309,6 @@ Joystick *Joystick::Get(const SDL_Event &event)
 		return Get(event.jhat.which);
 	case SDL_JOYBUTTONDOWN:
 	case SDL_JOYBUTTONUP:
-		return Get(event.jbutton.which);
 		return Get(event.jbutton.which);
 	default:
 		return nullptr;

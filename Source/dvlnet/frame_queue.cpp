@@ -4,14 +4,15 @@
 
 #include "dvlnet/packet.h"
 
-namespace devilution::net {
+namespace devilution {
+namespace net {
 
-framesize_t frame_queue::size()
+framesize_t frame_queue::Size() const
 {
 	return current_size;
 }
 
-buffer_t frame_queue::read(framesize_t s)
+buffer_t frame_queue::Read(framesize_t s)
 {
 	if (current_size < s)
 		throw frame_queue_exception();
@@ -35,38 +36,35 @@ buffer_t frame_queue::read(framesize_t s)
 	return ret;
 }
 
-void frame_queue::write(buffer_t buf)
+void frame_queue::Write(buffer_t buf)
 {
 	current_size += buf.size();
 	buffer_deque.push_back(std::move(buf));
 }
 
-bool frame_queue::packet_ready()
+bool frame_queue::PacketReady()
 {
-	if (!nextsize) {
-		if (size() < sizeof(framesize_t))
+	if (nextsize == 0) {
+		if (Size() < sizeof(framesize_t))
 			return false;
-		auto szbuf = read(sizeof(framesize_t));
+		auto szbuf = Read(sizeof(framesize_t));
 		std::memcpy(&nextsize, &szbuf[0], sizeof(framesize_t));
-		if (!nextsize)
+		if (nextsize == 0)
 			throw frame_queue_exception();
 	}
-	if (size() >= nextsize)
-		return true;
-
-	return false;
+	return Size() >= nextsize;
 }
 
-buffer_t frame_queue::read_packet()
+buffer_t frame_queue::ReadPacket()
 {
-	if (!nextsize || (size() < nextsize))
+	if (nextsize == 0 || Size() < nextsize)
 		throw frame_queue_exception();
-	auto ret = read(nextsize);
+	auto ret = Read(nextsize);
 	nextsize = 0;
 	return ret;
 }
 
-buffer_t frame_queue::make_frame(buffer_t packetbuf)
+buffer_t frame_queue::MakeFrame(buffer_t packetbuf)
 {
 	buffer_t ret;
 	if (packetbuf.size() > max_frame_size)
@@ -77,4 +75,5 @@ buffer_t frame_queue::make_frame(buffer_t packetbuf)
 	return ret;
 }
 
-} // namespace devilution::net
+} // namespace net
+} // namespace devilution

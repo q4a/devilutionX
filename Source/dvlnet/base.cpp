@@ -4,7 +4,8 @@
 #include <cstring>
 #include <memory>
 
-namespace devilution::net {
+namespace devilution {
+namespace net {
 
 void base::setup_gameinfo(buffer_t info)
 {
@@ -16,43 +17,43 @@ void base::setup_password(std::string pw)
 	pktfty = std::make_unique<packet_factory>(pw);
 }
 
-void base::run_event_handler(_SNETEVENT &ev)
+void base::RunEventHandler(_SNETEVENT &ev)
 {
 	auto f = registered_handlers[static_cast<event_type>(ev.eventid)];
-	if (f) {
+	if (f != nullptr) {
 		f(&ev);
 	}
 }
 
-void base::disconnect_net(plr_t plr)
+void base::DisconnectNet(plr_t plr)
 {
 }
 
-void base::handle_accept(packet &pkt)
+void base::HandleAccept(packet &pkt)
 {
 	if (plr_self != PLR_BROADCAST) {
 		return; // already have player id
 	}
-	if (pkt.cookie() == cookie_self) {
-		plr_self = pkt.newplr();
+	if (pkt.Cookie() == cookie_self) {
+		plr_self = pkt.NewPlayer();
 		connected_table[plr_self] = true;
 	}
-	if (game_init_info != pkt.info()) {
-		if (pkt.info().size() != sizeof(GameData)) {
+	if (game_init_info != pkt.Info()) {
+		if (pkt.Info().size() != sizeof(GameData)) {
 			ABORT();
 		}
 		// we joined and did not create
-		game_init_info = pkt.info();
+		game_init_info = pkt.Info();
 		_SNETEVENT ev;
 		ev.eventid = EVENT_TYPE_PLAYER_CREATE_GAME;
 		ev.playerid = plr_self;
-		ev.data = const_cast<unsigned char *>(pkt.info().data());
-		ev.databytes = pkt.info().size();
-		run_event_handler(ev);
+		ev.data = const_cast<unsigned char *>(pkt.Info().data());
+		ev.databytes = pkt.Info().size();
+		RunEventHandler(ev);
 	}
 }
 
-void base::clear_msg(plr_t plr)
+void base::ClearMsg(plr_t plr)
 {
 	message_queue.erase(std::remove_if(message_queue.begin(),
 	                        message_queue.end(),
@@ -62,38 +63,38 @@ void base::clear_msg(plr_t plr)
 	    message_queue.end());
 }
 
-void base::recv_local(packet &pkt)
+void base::RecvLocal(packet &pkt)
 {
-	if (pkt.src() < MAX_PLRS) {
-		connected_table[pkt.src()] = true;
+	if (pkt.Source() < MAX_PLRS) {
+		connected_table[pkt.Source()] = true;
 	}
-	switch (pkt.type()) {
+	switch (pkt.Type()) {
 	case PT_MESSAGE:
-		message_queue.emplace_back(pkt.src(), pkt.message());
+		message_queue.emplace_back(pkt.Source(), pkt.Message());
 		break;
 	case PT_TURN:
-		turn_queue[pkt.src()].push_back(pkt.turn());
+		turn_queue[pkt.Source()].push_back(pkt.Turn());
 		break;
 	case PT_JOIN_ACCEPT:
-		handle_accept(pkt);
+		HandleAccept(pkt);
 		break;
 	case PT_CONNECT:
-		connected_table[pkt.newplr()] = true; // this can probably be removed
+		connected_table[pkt.NewPlayer()] = true; // this can probably be removed
 		break;
 	case PT_DISCONNECT:
-		if (pkt.newplr() != plr_self) {
-			if (connected_table[pkt.newplr()]) {
-				auto leaveinfo = pkt.leaveinfo();
+		if (pkt.NewPlayer() != plr_self) {
+			if (connected_table[pkt.NewPlayer()]) {
+				auto leaveinfo = pkt.LeaveInfo();
 				_SNETEVENT ev;
 				ev.eventid = EVENT_TYPE_PLAYER_LEAVE_GAME;
-				ev.playerid = pkt.newplr();
+				ev.playerid = pkt.NewPlayer();
 				ev.data = reinterpret_cast<unsigned char *>(&leaveinfo);
 				ev.databytes = sizeof(leaveinfo_t);
-				run_event_handler(ev);
-				connected_table[pkt.newplr()] = false;
-				disconnect_net(pkt.newplr());
-				clear_msg(pkt.newplr());
-				turn_queue[pkt.newplr()].clear();
+				RunEventHandler(ev);
+				connected_table[pkt.NewPlayer()] = false;
+				DisconnectNet(pkt.NewPlayer());
+				ClearMsg(pkt.NewPlayer());
+				turn_queue[pkt.NewPlayer()].clear();
 			}
 		} else {
 			ABORT(); // we were dropped by the owner?!?
@@ -105,7 +106,7 @@ void base::recv_local(packet &pkt)
 	}
 }
 
-bool base::SNetReceiveMessage(int *sender, char **data, int *size)
+bool base::SNetReceiveMessage(int *sender, void **data, uint32_t *size)
 {
 	poll();
 	if (message_queue.empty())
@@ -114,24 +115,24 @@ bool base::SNetReceiveMessage(int *sender, char **data, int *size)
 	message_queue.pop_front();
 	*sender = message_last.sender;
 	*size = message_last.payload.size();
-	*data = reinterpret_cast<char *>(message_last.payload.data());
+	*data = message_last.payload.data();
 	return true;
 }
 
-bool base::SNetSendMessage(int playerID, void *data, unsigned int size)
+bool base::SNetSendMessage(int playerId, void *data, unsigned int size)
 {
-	if (playerID != SNPLAYER_ALL && playerID != SNPLAYER_OTHERS
-	    && (playerID < 0 || playerID >= MAX_PLRS))
+	if (playerId != SNPLAYER_ALL && playerId != SNPLAYER_OTHERS
+	    && (playerId < 0 || playerId >= MAX_PLRS))
 		abort();
-	auto rawMessage = reinterpret_cast<unsigned char *>(data);
+	auto *rawMessage = reinterpret_cast<unsigned char *>(data);
 	buffer_t message(rawMessage, rawMessage + size);
-	if (playerID == plr_self || playerID == SNPLAYER_ALL)
+	if (playerId == plr_self || playerId == SNPLAYER_ALL)
 		message_queue.emplace_back(plr_self, message);
 	plr_t dest;
-	if (playerID == SNPLAYER_ALL || playerID == SNPLAYER_OTHERS)
+	if (playerId == SNPLAYER_ALL || playerId == SNPLAYER_OTHERS)
 		dest = PLR_BROADCAST;
 	else
-		dest = playerID;
+		dest = playerId;
 	if (dest != plr_self) {
 		auto pkt = pktfty->make_packet<PT_MESSAGE>(plr_self, dest, message);
 		send(*pkt);
@@ -139,7 +140,7 @@ bool base::SNetSendMessage(int playerID, void *data, unsigned int size)
 	return true;
 }
 
-bool base::SNetReceiveTurns(char **data, unsigned int *size, DWORD *status)
+bool base::SNetReceiveTurns(char **data, size_t *size, uint32_t *status)
 {
 	poll();
 	bool allTurnsArrived = true;
@@ -182,11 +183,11 @@ bool base::SNetSendTurn(char *data, unsigned int size)
 	std::memcpy(&turn, data, sizeof(turn));
 	auto pkt = pktfty->make_packet<PT_TURN>(plr_self, PLR_BROADCAST, turn);
 	send(*pkt);
-	turn_queue[plr_self].push_back(pkt->turn());
+	turn_queue[plr_self].push_back(pkt->Turn());
 	return true;
 }
 
-int base::SNetGetProviderCaps(struct _SNETCAPS *caps)
+void base::SNetGetProviderCaps(struct _SNETCAPS *caps)
 {
 	caps->size = 0;                  // engine writes only ?!?
 	caps->flags = 0;                 // unused
@@ -198,10 +199,9 @@ int base::SNetGetProviderCaps(struct _SNETCAPS *caps)
 	caps->defaultturnssec = 10;      // ?
 	caps->defaultturnsintransit = 1; // maximum acceptable number
 	                                 // of turns in queue?
-	return 1;
 }
 
-bool base::SNetUnregisterEventHandler(event_type evtype, SEVTHANDLER func)
+bool base::SNetUnregisterEventHandler(event_type evtype)
 {
 	registered_handlers.erase(evtype);
 	return true;
@@ -229,18 +229,18 @@ bool base::SNetLeaveGame(int type)
 	return true;
 }
 
-bool base::SNetDropPlayer(int playerid, DWORD flags)
+bool base::SNetDropPlayer(int playerid, uint32_t flags)
 {
 	auto pkt = pktfty->make_packet<PT_DISCONNECT>(plr_self,
 	    PLR_BROADCAST,
 	    (plr_t)playerid,
 	    (leaveinfo_t)flags);
 	send(*pkt);
-	recv_local(*pkt);
+	RecvLocal(*pkt);
 	return true;
 }
 
-plr_t base::get_owner()
+plr_t base::GetOwner()
 {
 	for (auto i = 0; i < MAX_PLRS; ++i) {
 		if (connected_table[i]) {
@@ -250,16 +250,17 @@ plr_t base::get_owner()
 	return PLR_BROADCAST; // should be unreachable
 }
 
-bool base::SNetGetOwnerTurnsWaiting(DWORD *turns)
+bool base::SNetGetOwnerTurnsWaiting(uint32_t *turns)
 {
-	*turns = turn_queue[get_owner()].size();
+	*turns = turn_queue[GetOwner()].size();
 	return true;
 }
 
-bool base::SNetGetTurnsInTransit(DWORD *turns)
+bool base::SNetGetTurnsInTransit(uint32_t *turns)
 {
 	*turns = turn_queue[plr_self].size();
 	return true;
 }
 
-} // namespace devilution::net
+} // namespace net
+} // namespace devilution

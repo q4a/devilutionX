@@ -5,10 +5,14 @@
  */
 #pragma once
 
+#include <cstdint>
+
+#include "utils/stdcompat/cstddef.hpp"
+
 namespace devilution {
 
-Uint32 sync_all_monsters(const Uint8 *pbBuf, Uint32 dwMaxLen);
-Uint32 sync_update(int pnum, const Uint8 *pbBuf);
+uint32_t sync_all_monsters(const byte *pbBuf, uint32_t dwMaxLen);
+uint32_t sync_update(int pnum, const byte *pbBuf);
 void sync_init();
 
 } // namespace devilution

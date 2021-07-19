@@ -1,7 +1,7 @@
 #pragma once
 
 #include <SDL_ttf.h>
-#include <stdint.h>
+#include <cstdint>
 
 namespace devilution {
 
@@ -18,6 +18,6 @@ enum TextAlignment : uint8_t {
  * This method is slow. Caching the result is recommended.
  */
 SDL_Surface *RenderUTF8_Solid_Wrapped(
-    TTF_Font *font, const char *text, SDL_Color fg, Uint32 wrapLength, const int x_align = TextAlignment_BEGIN);
+    TTF_Font *font, const char *text, SDL_Color fg, Uint32 wrapLength, const int xAlign = TextAlignment_BEGIN);
 
 } // namespace devilution

@@ -10,8 +10,6 @@
 
 namespace devilution {
 
-extern SDL_Surface *pal_surface;
-
 namespace {
 
 TextAlignment XAlignmentFromFlags(int flags)
@@ -82,15 +80,17 @@ void DrawArtStr(const char *text, const SDL_Rect &rect, int flags, bool drawText
 	const int x = rect.x + AlignXOffset(flags, rect, GetArtStrWidth(text, size));
 	const int y = rect.y + ((flags & UIS_VCENTER) != 0 ? (rect.h - ArtFonts[size][color].h()) / 2 : 0);
 
-	int sx = x, sy = y;
+	int sx = x;
+	int sy = y;
 	for (size_t i = 0, n = strlen(text); i < n; i++) {
 		if (text[i] == '\n') {
 			sx = x;
 			sy += ArtFonts[size][color].h();
 			continue;
 		}
-		BYTE w = FontTables[size][*(BYTE *)&text[i] + 2] != 0 ? FontTables[size][*(BYTE *)&text[i] + 2] : FontTables[size][0];
-		DrawArt(sx, sy, &ArtFonts[size][color], *(BYTE *)&text[i], w);
+		uint8_t w = FontTables[size][static_cast<uint8_t>(text[i]) + 2];
+		w = (w != 0) ? w : FontTables[size][0];
+		DrawArt(sx, sy, &ArtFonts[size][color], static_cast<uint8_t>(text[i]), w);
 		sx += w;
 	}
 	if (drawTextCursor && GetAnimationFrame(2, 500) != 0) {
