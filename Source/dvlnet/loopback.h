@@ -1,44 +1,37 @@
 #pragma once
 
+#include <cstdint>
 #include <queue>
 #include <string>
 
 #include "dvlnet/abstract_net.h"
 
-namespace devilution {
-namespace net {
+namespace devilution::net {
 
 class loopback : public abstract_net {
 private:
 	std::queue<buffer_t> message_queue;
 	buffer_t message_last;
-	int plr_single;
+	uint8_t plr_single = 0;
 
 public:
-	loopback()
-	{
-		plr_single = 0;
-	};
+	loopback() = default;
 
-	virtual int create(std::string addrstr, std::string passwd);
-	virtual int join(std::string addrstr, std::string passwd);
-	virtual bool SNetReceiveMessage(int *sender, char **data, int *size);
-	virtual bool SNetSendMessage(int dest, void *data, unsigned int size);
-	virtual bool SNetReceiveTurns(char **data, unsigned int *size,
-	    DWORD *status);
-	virtual bool SNetSendTurn(char *data, unsigned int size);
-	virtual int SNetGetProviderCaps(struct _SNETCAPS *caps);
-	virtual bool SNetRegisterEventHandler(event_type evtype,
-	    SEVTHANDLER func);
-	virtual bool SNetUnregisterEventHandler(event_type evtype,
-	    SEVTHANDLER func);
-	virtual bool SNetLeaveGame(int type);
-	virtual bool SNetDropPlayer(int playerid, DWORD flags);
-	virtual bool SNetGetOwnerTurnsWaiting(DWORD *turns);
-	virtual bool SNetGetTurnsInTransit(DWORD *turns);
-	virtual void setup_gameinfo(buffer_t info);
-	virtual std::string make_default_gamename();
+	int create(std::string_view addrstr) override;
+	int join(std::string_view addrstr) override;
+	bool SNetReceiveMessage(uint8_t *sender, void **data, size_t *size) override;
+	bool SNetSendMessage(uint8_t dest, void *data, size_t size) override;
+	bool SNetReceiveTurns(char **data, size_t *size, uint32_t *status) override;
+	bool SNetSendTurn(char *data, size_t size) override;
+	void SNetGetProviderCaps(struct _SNETCAPS *caps) override;
+	bool SNetRegisterEventHandler(event_type evtype, SEVTHANDLER func) override;
+	bool SNetUnregisterEventHandler(event_type evtype) override;
+	bool SNetLeaveGame(net::leaveinfo_t type) override;
+	bool SNetDropPlayer(int playerid, net::leaveinfo_t flags) override;
+	bool SNetGetOwnerTurnsWaiting(uint32_t *turns) override;
+	bool SNetGetTurnsInTransit(uint32_t *turns) override;
+	void setup_gameinfo(buffer_t info) override;
+	std::string make_default_gamename() override;
 };
 
-} // namespace net
-} // namespace devilution
+} // namespace devilution::net

@@ -1,15 +1,15 @@
-#include <string.h>
-#include <stdbool.h>
+#include "platform/vita/keyboard.h"
+
+#include <cstdint>
+#include <cstring>
 
 #include <SDL.h>
-#include <psp2/types.h>
 #include <psp2/ime_dialog.h>
-#include "platform/vita/keyboard.h"
+#include <psp2/types.h>
 
 static void utf16_to_utf8(const uint16_t *src, uint8_t *dst)
 {
-	int i;
-	for (i = 0; src[i]; i++) {
+	for (int i = 0; src[i]; i++) {
 		if ((src[i] & 0xFF80) == 0) {
 			*(dst++) = src[i] & 0xFF;
 		} else if ((src[i] & 0xF800) == 0) {
@@ -31,14 +31,19 @@ static void utf16_to_utf8(const uint16_t *src, uint8_t *dst)
 	*dst = '\0';
 }
 
-static void utf8_to_utf16(const uint8_t *src, uint16_t *dst)
+static void utf8_to_utf16(const uint8_t *src, size_t src_size, uint16_t *dst)
 {
-	int i;
-	for (i = 0; src[i];) {
+	for (size_t i = 0; i < src_size && src[i];) {
 		if ((src[i] & 0xE0) == 0xE0) {
+			if (i + 2 >= src_size) {
+				break;
+			}
 			*(dst++) = ((src[i] & 0x0F) << 12) | ((src[i + 1] & 0x3F) << 6) | (src[i + 2] & 0x3F);
 			i += 3;
 		} else if ((src[i] & 0xC0) == 0xC0) {
+			if (i + 1 >= src_size) {
+				break;
+			}
 			*(dst++) = ((src[i] & 0x1F) << 6) | (src[i + 1] & 0x3F);
 			i += 2;
 		} else {
@@ -78,7 +83,7 @@ static int vita_input_thread(void *ime_buffer)
 	return 0;
 }
 
-static int vita_keyboard_get(const char *guide_text, const char *initial_text, int max_len, SceWChar16 *buf)
+static int vita_keyboard_get(std::string_view guide_text, std::string_view initial_text, unsigned max_len, SceWChar16 *buf)
 {
 	SceWChar16 title[SCE_IME_DIALOG_MAX_TITLE_LENGTH];
 	SceWChar16 text[SCE_IME_DIALOG_MAX_TEXT_LENGTH];
@@ -86,13 +91,13 @@ static int vita_keyboard_get(const char *guide_text, const char *initial_text, i
 
 	SDL_memset(&title, 0, sizeof(title));
 	SDL_memset(&text, 0, sizeof(text));
-	utf8_to_utf16((const uint8_t *)guide_text, title);
-	utf8_to_utf16((const uint8_t *)initial_text, text);
+	utf8_to_utf16(reinterpret_cast<const uint8_t *>(guide_text.data()), guide_text.size(), title);
+	utf8_to_utf16(reinterpret_cast<const uint8_t *>(initial_text.data()), initial_text.size(), text);
 
 	SceImeDialogParam param;
 	sceImeDialogParamInit(&param);
 
-	param.supportedLanguages = SCE_IME_LANGUAGE_ENGLISH;
+	param.supportedLanguages = 0;
 	param.languagesForced = SCE_FALSE;
 	param.type = SCE_IME_TYPE_DEFAULT;
 	param.option = 0;
@@ -111,7 +116,7 @@ static int vita_keyboard_get(const char *guide_text, const char *initial_text, i
 	return 1;
 }
 
-void vita_start_text_input(const char *guide_text, const char *initial_text, int max_length)
+void vita_start_text_input(std::string_view guide_text, std::string_view initial_text, unsigned max_length)
 {
 	SceWChar16 ime_buffer[SCE_IME_DIALOG_MAX_TEXT_LENGTH];
 	if (vita_keyboard_get(guide_text, initial_text, max_length, ime_buffer)) {

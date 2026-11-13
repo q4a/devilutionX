@@ -5,56 +5,58 @@
  */
 #pragma once
 
-#include <stdint.h>
-
-#include "miniwin/miniwin.h"
+#include "cursor_defs.hpp"
+#include "engine/clx_sprite.hpp"
+#include "engine/point.hpp"
+#include "engine/size.hpp"
+#include "engine/surface.hpp"
+#include "utils/attributes.h"
 
 namespace devilution {
 
-enum cursor_id : uint8_t {
-	CURSOR_NONE,
-	CURSOR_HAND,
-	CURSOR_IDENTIFY,
-	CURSOR_REPAIR,
-	CURSOR_RECHARGE,
-	CURSOR_DISARM,
-	CURSOR_OIL,
-	CURSOR_TELEKINESIS,
-	CURSOR_RESURRECT,
-	CURSOR_TELEPORT,
-	CURSOR_HEALOTHER,
-	CURSOR_HOURGLASS,
-	CURSOR_FIRSTITEM,
-};
-
-extern int cursW;
-extern int cursH;
 extern int pcursmonst;
-extern int icursW28;
-extern int icursH28;
-extern BYTE *pCursCels;
-extern BYTE *pCursCels2;
-extern int icursH;
 extern int8_t pcursinvitem;
-extern int icursW;
+extern uint16_t pcursstashitem;
 extern int8_t pcursitem;
-extern int8_t pcursobj;
-extern int8_t pcursplr;
-extern int cursmx;
-extern int cursmy;
-extern int pcurs;
+
+struct Object; // Defined in objects.h
+extern Object *ObjectUnderCursor;
+
+struct Player; // Defined in player.h
+extern const Player *PlayerUnderCursor;
+extern Point cursPosition;
+extern DVL_API_FOR_TEST int pcurs;
 
 void InitCursor();
 void FreeCursor();
-void SetICursor(int i);
-void NewCursor(int i);
+void ResetCursor();
+
+struct Item;
+/**
+ * @brief Use the item sprite as the cursor (or show the default hand cursor if the item isEmpty)
+ */
+void NewCursor(const Item &item);
+
+void NewCursor(int cursId);
+
 void InitLevelCursor();
 void CheckRportal();
 void CheckTown();
 void CheckCursMove();
 
-/* rdata */
-extern const int InvItemWidth[];
-extern const int InvItemHeight[];
+void DrawSoftwareCursor(const Surface &out, Point position, int cursId);
+
+void DrawItem(const Item &item, const Surface &out, Point position, ClxSprite clx);
+
+/** Returns the sprite for the given inventory index. */
+ClxSprite GetInvItemSprite(int cursId);
+
+ClxSprite GetHalfSizeItemSprite(int cursId);
+ClxSprite GetHalfSizeItemSpriteRed(int cursId);
+void CreateHalfSizeItemSprites();
+void FreeHalfSizeItemSprites();
+
+/** Returns the width and height for an inventory index. */
+Size GetInvItemSize(int cursId);
 
 } // namespace devilution

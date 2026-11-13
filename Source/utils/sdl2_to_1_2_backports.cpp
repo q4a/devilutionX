@@ -1,8 +1,22 @@
-#include "./sdl2_to_1_2_backports.h"
+#include "utils/sdl2_to_1_2_backports.h"
 
+#include <algorithm>
 #include <cstddef>
+#include <cstring>
+#include <string_view>
 
-#include "./console.h"
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX 1
+#ifndef DEVILUTIONX_WINDOWS_NO_WCHAR
+#define UNICODE 1
+#include <shlobj.h>
+#endif
+#include <windows.h>
+#endif
+
+#include "utils/console.h"
+#include "utils/str_cat.hpp"
 
 #define DEFAULT_PRIORITY SDL_LOG_PRIORITY_CRITICAL
 #define DEFAULT_ASSERT_PRIORITY SDL_LOG_PRIORITY_WARN
@@ -153,12 +167,12 @@ void SDL_LogMessage(int category, SDL_LogPriority priority, const char *fmt, ...
 
 void SDL_LogMessageV(int category, SDL_LogPriority priority, const char *fmt, va_list ap)
 {
-	if (static_cast<int>(priority) < 0 || priority >= SDL_NUM_LOG_PRIORITIES || priority < SDL_LogGetPriority(category))
+	if (static_cast<int>(priority) < 0 || priority >= SDL_NUM_LOG_PRIORITIES || SDL_LogGetPriority(category) > priority)
 		return;
 
-	::devilution::printInConsole("%s: ", SDL_priority_prefixes[priority]);
-	::devilution::printInConsoleV(fmt, ap);
-	::devilution::printInConsole("\n");
+	::devilution::printfInConsole("%s: ", SDL_priority_prefixes[priority]);
+	::devilution::vprintfInConsole(fmt, ap);
+	::devilution::printNewlineInConsole();
 }
 
 namespace {
@@ -166,13 +180,11 @@ namespace {
 #define DEFINE_COPY_ROW(name, type)                       \
 	void name(type *src, int src_w, type *dst, int dst_w) \
 	{                                                     \
-		int i;                                            \
-		int pos, inc;                                     \
 		type pixel = 0;                                   \
                                                           \
-		pos = 0x10000;                                    \
-		inc = (src_w << 16) / dst_w;                      \
-		for (i = dst_w; i > 0; --i) {                     \
+		int pos = 0x10000;                                \
+		int inc = (src_w << 16) / dst_w;                  \
+		for (int i = dst_w; i > 0; i--) {                 \
 			while (pos >= 0x10000L) {                     \
 				pixel = *src++;                           \
 				pos -= 0x10000L;                          \
@@ -187,13 +199,11 @@ DEFINE_COPY_ROW(copy_row4, Uint32)
 
 void copy_row3(Uint8 *src, int src_w, Uint8 *dst, int dst_w)
 {
-	int i;
-	int pos, inc;
 	Uint8 pixel[3] = { 0, 0, 0 };
 
-	pos = 0x10000;
-	inc = (src_w << 16) / dst_w;
-	for (i = dst_w; i > 0; --i) {
+	int pos = 0x10000;
+	int inc = (src_w << 16) / dst_w;
+	for (int i = dst_w; i > 0; --i) {
 		while (pos >= 0x10000L) {
 			pixel[0] = *src++;
 			pixel[1] = *src++;
@@ -219,7 +229,7 @@ int SDL_SoftStretch(SDL_Surface *src, const SDL_Rect *srcrect,
 	int pos, inc;
 	int dst_maxrow;
 	int src_row, dst_row;
-	Uint8 *srcp = NULL;
+	Uint8 *srcp = nullptr;
 	Uint8 *dstp;
 	SDL_Rect full_src;
 	SDL_Rect full_dst;
@@ -330,10 +340,10 @@ int SDL_BlitScaled(SDL_Surface *src, SDL_Rect *srcrect,
 		return SDL_BlitSurface(src, srcrect, dst, dstrect);
 	}
 
-	double src_x0, src_y0, src_x1, src_y1;
-	double dst_x0, dst_y0, dst_x1, dst_y1;
+	float src_x0, src_y0, src_x1, src_y1;
+	float dst_x0, dst_y0, dst_x1, dst_y1;
 	SDL_Rect final_src, final_dst;
-	double scaling_w, scaling_h;
+	float scaling_w, scaling_h;
 	int src_w, src_h;
 	int dst_w, dst_h;
 
@@ -347,7 +357,7 @@ int SDL_BlitScaled(SDL_Surface *src, SDL_Rect *srcrect,
 		return -1;
 	}
 
-	if (NULL == srcrect) {
+	if (nullptr == srcrect) {
 		src_w = src->w;
 		src_h = src->h;
 	} else {
@@ -355,7 +365,7 @@ int SDL_BlitScaled(SDL_Surface *src, SDL_Rect *srcrect,
 		src_h = srcrect->h;
 	}
 
-	if (NULL == dstrect) {
+	if (nullptr == dstrect) {
 		dst_w = dst->w;
 		dst_h = dst->h;
 	} else {
@@ -368,14 +378,14 @@ int SDL_BlitScaled(SDL_Surface *src, SDL_Rect *srcrect,
 		return SDL_BlitSurface(src, srcrect, dst, dstrect);
 	}
 
-	scaling_w = (double)dst_w / src_w;
-	scaling_h = (double)dst_h / src_h;
+	scaling_w = (float)dst_w / src_w;
+	scaling_h = (float)dst_h / src_h;
 
-	if (NULL == dstrect) {
+	if (nullptr == dstrect) {
 		dst_x0 = 0;
 		dst_y0 = 0;
-		dst_x1 = dst_w - 1;
-		dst_y1 = dst_h - 1;
+		dst_x1 = static_cast<float>(dst_w - 1);
+		dst_y1 = static_cast<float>(dst_h - 1);
 	} else {
 		dst_x0 = dstrect->x;
 		dst_y0 = dstrect->y;
@@ -383,11 +393,11 @@ int SDL_BlitScaled(SDL_Surface *src, SDL_Rect *srcrect,
 		dst_y1 = dst_y0 + dst_h - 1;
 	}
 
-	if (NULL == srcrect) {
+	if (nullptr == srcrect) {
 		src_x0 = 0;
 		src_y0 = 0;
-		src_x1 = src_w - 1;
-		src_y1 = src_h - 1;
+		src_x1 = static_cast<float>(src_w - 1);
+		src_y1 = static_cast<float>(src_h - 1);
 	} else {
 		src_x0 = srcrect->x;
 		src_y0 = srcrect->y;
@@ -403,7 +413,7 @@ int SDL_BlitScaled(SDL_Surface *src, SDL_Rect *srcrect,
 
 		if (src_x1 >= src->w) {
 			dst_x1 -= (src_x1 - src->w + 1) * scaling_w;
-			src_x1 = src->w - 1;
+			src_x1 = static_cast<float>(src->w - 1);
 		}
 
 		if (src_y0 < 0) {
@@ -413,7 +423,7 @@ int SDL_BlitScaled(SDL_Surface *src, SDL_Rect *srcrect,
 
 		if (src_y1 >= src->h) {
 			dst_y1 -= (src_y1 - src->h + 1) * scaling_h;
-			src_y1 = src->h - 1;
+			src_y1 = static_cast<float>(src->h - 1);
 		}
 	}
 
@@ -432,7 +442,7 @@ int SDL_BlitScaled(SDL_Surface *src, SDL_Rect *srcrect,
 
 	if (dst_x1 >= dst->clip_rect.w) {
 		src_x1 -= (dst_x1 - dst->clip_rect.w + 1) / scaling_w;
-		dst_x1 = dst->clip_rect.w - 1;
+		dst_x1 = static_cast<float>(dst->clip_rect.w - 1);
 	}
 
 	if (dst_y0 < 0) {
@@ -442,7 +452,7 @@ int SDL_BlitScaled(SDL_Surface *src, SDL_Rect *srcrect,
 
 	if (dst_y1 >= dst->clip_rect.h) {
 		src_y1 -= (dst_y1 - dst->clip_rect.h + 1) / scaling_h;
-		dst_y1 = dst->clip_rect.h - 1;
+		dst_y1 = static_cast<float>(dst->clip_rect.h - 1);
 	}
 
 	/* Translate back to surface coordinates */
@@ -451,26 +461,18 @@ int SDL_BlitScaled(SDL_Surface *src, SDL_Rect *srcrect,
 	dst_y0 += dst->clip_rect.y;
 	dst_y1 += dst->clip_rect.y;
 
-	final_src.x = (Sint16)SDL_floor(src_x0 + 0.5);
-	final_src.y = (Sint16)SDL_floor(src_y0 + 0.5);
-	src_w = (int)SDL_floor(src_x1 + 1 + 0.5) - (int)SDL_floor(src_x0 + 0.5);
-	src_h = (int)SDL_floor(src_y1 + 1 + 0.5) - (int)SDL_floor(src_y0 + 0.5);
-	if (src_w < 0)
-		src_w = 0;
-	if (src_h < 0)
-		src_h = 0;
+	final_src.x = static_cast<Sint16>(SDL_floor(src_x0 + 0.5));
+	final_src.y = static_cast<Sint16>(SDL_floor(src_y0 + 0.5));
+	src_w = std::max(static_cast<int>(SDL_floor(src_x1 + 1 + 0.5)) - static_cast<int>(SDL_floor(src_x0 + 0.5)), 0);
+	src_h = std::max(static_cast<int>(SDL_floor(src_y1 + 1 + 0.5)) - static_cast<int>(SDL_floor(src_y0 + 0.5)), 0);
 
 	final_src.w = static_cast<Uint16>(src_w);
 	final_src.h = static_cast<Uint16>(src_h);
 
-	final_dst.x = (Sint16)SDL_floor(dst_x0 + 0.5);
-	final_dst.y = (Sint16)SDL_floor(dst_y0 + 0.5);
-	dst_w = (int)SDL_floor(dst_x1 - dst_x0 + 1.5);
-	dst_h = (int)SDL_floor(dst_y1 - dst_y0 + 1.5);
-	if (dst_w < 0)
-		dst_w = 0;
-	if (dst_h < 0)
-		dst_h = 0;
+	final_dst.x = static_cast<Sint16>(SDL_floor(dst_x0 + 0.5));
+	final_dst.y = static_cast<Sint16>(SDL_floor(dst_y0 + 0.5));
+	dst_w = std::max(static_cast<int>(SDL_floor(dst_x1 - dst_x0 + 1.5)), 0);
+	dst_h = std::max(static_cast<int>(SDL_floor(dst_y1 - dst_y0 + 1.5)), 0);
 
 	final_dst.w = static_cast<Uint16>(dst_w);
 	final_dst.h = static_cast<Uint16>(dst_h);
@@ -488,18 +490,229 @@ int SDL_BlitScaled(SDL_Surface *src, SDL_Rect *srcrect,
 
 // = Filesystem
 
+Sint64 SDL_RWsize(SDL_RWops *context)
+{
+	const int current = SDL_RWtell(context);
+	if (current == -1)
+		return -1;
+
+	const int begin = SDL_RWseek(context, 0, RW_SEEK_SET);
+	if (begin == -1)
+		return -1;
+
+	const int end = SDL_RWseek(context, 0, RW_SEEK_END);
+	if (end == -1)
+		return -1;
+
+	if (SDL_RWseek(context, current, RW_SEEK_SET) == -1)
+		return -1;
+
+	return end - begin;
+}
+
+#if defined(_WIN32) && !defined(DEVILUTIONX_WINDOWS_NO_WCHAR)
+
 namespace {
-#if !defined(__QNXNTO__)
+
+// From sdl2-2.0.9/src/core/windows/SDL_windows.h
+#define WIN_StringToUTF8(S) SDL_iconv_string("UTF-8", "UTF-16LE", (char *)(S), (wcslen(S) + 1) * sizeof(WCHAR))
+#define WIN_UTF8ToString(S) (WCHAR *)SDL_iconv_string("UTF-16LE", "UTF-8", (char *)(S), SDL_strlen(S) + 1)
+
+/* Sets an error message based on an HRESULT */
+int WIN_SetErrorFromHRESULT(const char *prefix, HRESULT hr)
+{
+	// From sdl2-2.0.9/src/core/windows/SDL_windows.c
+
+	TCHAR buffer[1024];
+	char *message;
+	FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM, NULL, hr, 0,
+	    buffer, SDL_arraysize(buffer), NULL);
+	message = WIN_StringToUTF8(buffer);
+	SDL_SetError("%s%s%s", prefix ? prefix : "", prefix ? ": " : "", message);
+	SDL_free(message);
+	return -1;
+}
+
+/* Sets an error message based on GetLastError() */
+int WIN_SetError(const char *prefix)
+{
+	// From sdl2-2.0.9/src/core/windows/SDL_windows.c
+
+	return WIN_SetErrorFromHRESULT(prefix, GetLastError());
+}
+
+} // namespace
+
+extern "C" char *SDL_GetBasePath(void)
+{
+	// From sdl2-2.0.9/src/filesystem/windows/SDL_sysfilesystem.c
+
+	typedef DWORD(WINAPI * GetModuleFileNameExW_t)(HANDLE, HMODULE, LPWSTR, DWORD);
+	GetModuleFileNameExW_t pGetModuleFileNameExW;
+	DWORD buflen = 128;
+	WCHAR *path = NULL;
+	HMODULE psapi = LoadLibrary(L"psapi.dll");
+	char *retval = NULL;
+	DWORD len = 0;
+	int i;
+
+	if (!psapi) {
+		WIN_SetError("Couldn't load psapi.dll");
+		return NULL;
+	}
+
+	pGetModuleFileNameExW = (GetModuleFileNameExW_t)GetProcAddress(psapi, "GetModuleFileNameExW");
+	if (!pGetModuleFileNameExW) {
+		WIN_SetError("Couldn't find GetModuleFileNameExW");
+		FreeLibrary(psapi);
+		return NULL;
+	}
+
+	while (SDL_TRUE) {
+		void *ptr = SDL_realloc(path, buflen * sizeof(WCHAR));
+		if (!ptr) {
+			SDL_free(path);
+			FreeLibrary(psapi);
+			SDL_OutOfMemory();
+			return NULL;
+		}
+
+		path = (WCHAR *)ptr;
+
+		len = pGetModuleFileNameExW(GetCurrentProcess(), NULL, path, buflen);
+		if (len != buflen) {
+			break;
+		}
+
+		/* buffer too small? Try again. */
+		buflen *= 2;
+	}
+
+	FreeLibrary(psapi);
+
+	if (len == 0) {
+		SDL_free(path);
+		WIN_SetError("Couldn't locate our .exe");
+		return NULL;
+	}
+
+	for (i = len - 1; i > 0; i--) {
+		if (path[i] == '\\') {
+			break;
+		}
+	}
+
+	path[i + 1] = '\0'; /* chop off filename. */
+
+	retval = WIN_StringToUTF8(path);
+	SDL_free(path);
+
+	return retval;
+}
+
+extern "C" char *SDL_GetPrefPath(const char *org, const char *app)
+{
+	// From sdl2-2.0.9/src/filesystem/windows/SDL_sysfilesystem.c
+
+	/*
+	 * Vista and later has a new API for this, but SHGetFolderPath works there,
+	 *  and apparently just wraps the new API. This is the new way to do it:
+	 *
+	 *     SHGetKnownFolderPath(FOLDERID_RoamingAppData, KF_FLAG_CREATE,
+	 *                          NULL, &wszPath);
+	 */
+
+	WCHAR path[MAX_PATH];
+	char *retval = NULL;
+	WCHAR *worg = NULL;
+	WCHAR *wapp = NULL;
+	size_t new_wpath_len = 0;
+	BOOL api_result = FALSE;
+
+	if (!app) {
+		SDL_InvalidParamError("app");
+		return NULL;
+	}
+	if (!org) {
+		org = "";
+	}
+
+	if (!SUCCEEDED(SHGetFolderPathW(NULL, CSIDL_APPDATA | CSIDL_FLAG_CREATE, NULL, 0, path))) {
+		WIN_SetError("Couldn't locate our prefpath");
+		return NULL;
+	}
+
+	worg = WIN_UTF8ToString(org);
+	if (worg == NULL) {
+		SDL_OutOfMemory();
+		return NULL;
+	}
+
+	wapp = WIN_UTF8ToString(app);
+	if (wapp == NULL) {
+		SDL_free(worg);
+		SDL_OutOfMemory();
+		return NULL;
+	}
+
+	new_wpath_len = lstrlenW(worg) + lstrlenW(wapp) + lstrlenW(path) + 3;
+
+	if ((new_wpath_len + 1) > MAX_PATH) {
+		SDL_free(worg);
+		SDL_free(wapp);
+		WIN_SetError("Path too long.");
+		return NULL;
+	}
+
+	if (*worg) {
+		lstrcatW(path, L"\\");
+		lstrcatW(path, worg);
+	}
+	SDL_free(worg);
+
+	api_result = CreateDirectoryW(path, NULL);
+	if (api_result == FALSE) {
+		if (GetLastError() != ERROR_ALREADY_EXISTS) {
+			SDL_free(wapp);
+			WIN_SetError("Couldn't create a prefpath.");
+			return NULL;
+		}
+	}
+
+	lstrcatW(path, L"\\");
+	lstrcatW(path, wapp);
+	SDL_free(wapp);
+
+	api_result = CreateDirectoryW(path, NULL);
+	if (api_result == FALSE) {
+		if (GetLastError() != ERROR_ALREADY_EXISTS) {
+			WIN_SetError("Couldn't create a prefpath.");
+			return NULL;
+		}
+	}
+
+	lstrcatW(path, L"\\");
+
+	retval = WIN_StringToUTF8(path);
+
+	return retval;
+}
+
+// For Apple, definitions are in Source/platform/macos_sdl1/SDL_filesystem.m
+#elif !defined(__APPLE__)
+
+namespace {
+#if !defined(__QNXNTO__) && !(defined(WINVER) && WINVER <= 0x0500 && (!defined(_WIN32_WINNT) || _WIN32_WINNT == 0))
 char *readSymLink(const char *path)
 {
 	// From sdl2-2.0.9/src/filesystem/unix/SDL_sysfilesystem.c
-	char *retval = NULL;
+	char *retval = nullptr;
 	ssize_t len = 64;
 	ssize_t rc = -1;
 
 	while (1) {
 		char *ptr = (char *)SDL_realloc(retval, (size_t)len);
-		if (ptr == NULL) {
+		if (ptr == nullptr) {
 			SDL_OutOfMemory();
 			break;
 		}
@@ -518,18 +731,35 @@ char *readSymLink(const char *path)
 	}
 
 	SDL_free(retval);
-	return NULL;
+	return nullptr;
 }
 #endif
 } // namespace
 
-char *SDL_GetBasePath()
+extern "C" char *SDL_GetBasePath()
 {
 	// From sdl2-2.0.9/src/filesystem/unix/SDL_sysfilesystem.c
 
-	char *retval = NULL;
+	char *retval = nullptr;
 
-#if defined(__FREEBSD__)
+#if defined(WINVER) && WINVER <= 0x0500 && (!defined(_WIN32_WINNT) || _WIN32_WINNT == 0)
+	TCHAR buffer[MAX_PATH] = { 0 };
+	GetModuleFileName(nullptr, buffer, MAX_PATH);
+	size_t len = std::string_view(buffer).size();
+	while (len > 0) {
+		if (buffer[len - 1] == '\\') {
+			break;
+		}
+		--len;
+	}
+	buffer[len] = '\0';
+	retval = static_cast<char *>(SDL_malloc(len + 1));
+	if (!retval) {
+		SDL_OutOfMemory();
+		return NULL;
+	}
+	SDL_memcpy(retval, buffer, len + 1);
+#elif defined(__FREEBSD__)
 	char fullpath[PATH_MAX];
 	size_t buflen = sizeof(fullpath);
 	const int mib[] = { CTL_KERN, KERN_PROC, KERN_PROC_PATHNAME, -1 };
@@ -540,8 +770,7 @@ char *SDL_GetBasePath()
 			return NULL;
 		}
 	}
-#endif
-#if defined(__OPENBSD__)
+#elif defined(__OPENBSD__)
 	char **retvalargs;
 	size_t len;
 	const int mib[] = { CTL_KERN, KERN_PROC_ARGS, getpid(), KERN_PROC_ARGV };
@@ -558,8 +787,7 @@ char *SDL_GetBasePath()
 
 		SDL_free(retvalargs);
 	}
-#endif
-#if defined(__SOLARIS__)
+#elif defined(__SOLARIS__)
 	const char *path = getexecname();
 	if ((path != NULL) && (path[0] == '/')) { /* must be absolute path... */
 		retval = SDL_strdup(path);
@@ -568,26 +796,26 @@ char *SDL_GetBasePath()
 			return NULL;
 		}
 	}
-#endif
-#if defined(__3DS__)
+#elif defined(__3DS__)
 	retval = SDL_strdup("file:sdmc:/3ds/devilutionx/");
-	return retval;
-#endif
+#elif defined(__amigaos__)
+	retval = SDL_strdup("PROGDIR:");
+#else
 
 	/* is a Linux-style /proc filesystem available? */
 	if (!retval && (access("/proc", F_OK) == 0)) {
 		/* !!! FIXME: after 2.0.6 ships, let's delete this code and just
-                      use the /proc/%llu version. There's no reason to have
-                      two copies of this plus all the #ifdefs. --ryan. */
+		              use the /proc/%llu version. There's no reason to have
+		              two copies of this plus all the #ifdefs. --ryan. */
 #if defined(__FREEBSD__)
 		retval = readSymLink("/proc/curproc/file");
 #elif defined(__NETBSD__)
 		retval = readSymLink("/proc/curproc/exe");
 #elif defined(__QNXNTO__)
-		retval = SDL_LoadFile("/proc/self/exefile", NULL);
+		retval = SDL_LoadFile("/proc/self/exefile", nullptr);
 #else
 		retval = readSymLink("/proc/self/exe"); /* linux. */
-		if (retval == NULL) {
+		if (retval == nullptr) {
 			/* older kernels don't have /proc/self ... try PID version... */
 			char path[64];
 			const int rc = (int)SDL_snprintf(path, sizeof(path),
@@ -601,52 +829,61 @@ char *SDL_GetBasePath()
 	}
 
 	/* If we had access to argv[0] here, we could check it for a path,
-        or troll through $PATH looking for it, too. */
+	    or troll through $PATH looking for it, too. */
 
-	if (retval != NULL) { /* chop off filename. */
+	if (retval != nullptr) { /* chop off filename. */
 		char *ptr = SDL_strrchr(retval, '/');
-		if (ptr != NULL) {
+		if (ptr != nullptr) {
 			*(ptr + 1) = '\0';
 		} else { /* shouldn't happen, but just in case... */
 			SDL_free(retval);
-			retval = NULL;
+			retval = nullptr;
 		}
 	}
 
-	if (retval != NULL) {
+	if (retval != nullptr) {
 		/* try to shrink buffer... */
 		char *ptr = (char *)SDL_realloc(retval, strlen(retval) + 1);
-		if (ptr != NULL)
+		if (ptr != nullptr)
 			retval = ptr; /* oh well if it failed. */
 	}
-
+#endif
 	return retval;
 }
 
-char *SDL_GetPrefPath(const char *org, const char *app)
+extern "C" char *SDL_GetPrefPath(const char *org, const char *app)
 {
 	// From sdl2-2.0.9/src/filesystem/unix/SDL_sysfilesystem.c
 	/*
-     * We use XDG's base directory spec, even if you're not on Linux.
-     *  This isn't strictly correct, but the results are relatively sane
-     *  in any case.
-     *
-     * http://standards.freedesktop.org/basedir-spec/basedir-spec-latest.html
-     */
+	 * We use XDG's base directory spec, even if you're not on Linux.
+	 *  This isn't strictly correct, but the results are relatively sane
+	 *  in any case.
+	 *
+	 * https://standards.freedesktop.org/basedir-spec/basedir-spec-latest.html
+	 */
+#if (defined(WINVER) && WINVER <= 0x0500 && (!defined(_WIN32_WINNT) || _WIN32_WINNT == 0)) || defined(__DJGPP__)
+	// On Windows9x there is no such thing as PrefPath. Simply use the current directory.
+	char *result = (char *)SDL_malloc(1);
+	*result = '\0';
+	return result;
+#else
 	const char *envr = SDL_getenv("XDG_DATA_HOME");
 	const char *append;
-	char *retval = NULL;
-	char *ptr = NULL;
+	char *retval = nullptr;
+	char *ptr = nullptr;
 	size_t len = 0;
 
 #if defined(__3DS__)
 	retval = SDL_strdup("sdmc:/3ds/devilutionx/");
 	return retval;
+#elif defined(__amigaos__)
+	retval = SDL_strdup("PROGDIR:");
+	return retval;
 #endif
 
 	if (!app) {
 		SDL_InvalidParamError("app");
-		return NULL;
+		return nullptr;
 	}
 	if (!org) {
 		org = "";
@@ -658,7 +895,7 @@ char *SDL_GetPrefPath(const char *org, const char *app)
 		if (!envr) {
 			/* we could take heroic measures with /etc/passwd, but oh well. */
 			SDL_SetError("neither XDG_DATA_HOME nor HOME environment is set");
-			return NULL;
+			return nullptr;
 		}
 #if defined(__unix__) || defined(__unix)
 		append = "/.local/share/";
@@ -677,13 +914,13 @@ char *SDL_GetPrefPath(const char *org, const char *app)
 	retval = (char *)SDL_malloc(len);
 	if (!retval) {
 		SDL_OutOfMemory();
-		return NULL;
+		return nullptr;
 	}
 
 	if (*org) {
-		SDL_snprintf(retval, len, "%s%s%s/%s", envr, append, org, app);
+		*devilution::BufCopy(retval, envr, append, org, "/", app) = '\0';
 	} else {
-		SDL_snprintf(retval, len, "%s%s%s", envr, append, app);
+		*devilution::BufCopy(retval, envr, append, app) = '\0';
 	}
 
 	for (ptr = retval + 1; *ptr; ptr++) {
@@ -698,7 +935,7 @@ char *SDL_GetPrefPath(const char *org, const char *app)
 	error:
 		SDL_SetError("Couldn't create directory '%s': '%s'", retval, strerror(errno));
 		SDL_free(retval);
-		return NULL;
+		return nullptr;
 	}
 
 	// Append trailing /
@@ -709,4 +946,7 @@ char *SDL_GetPrefPath(const char *org, const char *app)
 	}
 
 	return retval;
+#endif
 }
+
+#endif

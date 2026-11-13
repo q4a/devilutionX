@@ -5,30 +5,45 @@
  */
 #pragma once
 
+#include <cstdint>
+#include <expected>
+
+#include "pfile.h"
 #include "player.h"
+#include "utils/attributes.h"
 
 namespace devilution {
 
-extern bool gbIsHellfireSaveGame;
-extern uint8_t giNumberOfLevels;
+extern DVL_API_FOR_TEST bool gbIsHellfireSaveGame;
+extern DVL_API_FOR_TEST uint8_t giNumberOfLevels;
 
-void RemoveInvalidItem(ItemStruct *pItem);
-int RemapItemIdxFromDiablo(int i);
-int RemapItemIdxToDiablo(int i);
-bool IsHeaderValid(Uint32 magicNumber);
+void RemoveInvalidItem(Item &pItem);
+_item_indexes RemapItemIdxFromDiablo(_item_indexes i);
+_item_indexes RemapItemIdxToDiablo(_item_indexes i);
+_item_indexes RemapItemIdxFromSpawn(_item_indexes i);
+_item_indexes RemapItemIdxToSpawn(_item_indexes i);
+bool IsHeaderValid(uint32_t magicNumber);
 void LoadHotkeys();
-void LoadHeroItems(PlayerStruct *pPlayer);
+void LoadHeroItems(Player &player);
 /**
  * @brief Remove invalid inventory items from the inventory grid
- * @param pnum The id of the player
+ * @param player The player to remove invalid items from
  */
-void RemoveEmptyInventory(int pnum);
-void LoadGame(bool firstflag);
-void SaveHotkeys();
-void SaveHeroItems(PlayerStruct *pPlayer);
-void SaveGameData();
+void RemoveEmptyInventory(Player &player);
+
+/**
+ * @brief Load game state
+ * @param firstflag Can be set to false if we are simply reloading the current game
+ */
+std::expected<void, std::string> LoadGame(bool firstflag);
+void SaveHotkeys(SaveWriter &saveWriter, const Player &player);
+void SaveHeroItems(SaveWriter &saveWriter, Player &player);
+void SaveGameData(SaveWriter &saveWriter);
 void SaveGame();
-void SaveLevel();
-void LoadLevel();
+void SaveLevel(SaveWriter &saveWriter);
+std::expected<void, std::string> LoadLevel();
+std::expected<void, std::string> ConvertLevels(SaveWriter &saveWriter);
+void LoadStash();
+void SaveStash(SaveWriter &stashWriter);
 
 } // namespace devilution

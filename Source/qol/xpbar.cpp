@@ -1,151 +1,158 @@
 /**
-* @file xpbar.cpp
-*
-* Adds XP bar QoL feature
-*/
-
-#include "DiabloUI/art_draw.h"
-#include "common.h"
-#include "control.h"
-#include "options.h"
+ * @file xpbar.cpp
+ *
+ * Adds XP bar QoL feature
+ */
+#include "xpbar.h"
 
 #include <array>
+#include <cstdint>
+
+#include "control/control.hpp"
+#include "engine/clx_sprite.hpp"
+#include "engine/load_clx.hpp"
+#include "engine/point.hpp"
+#include "engine/render/clx_render.hpp"
+#include "engine/render/primitive_render.hpp"
+#include "game_mode.hpp"
+#include "options.h"
+#include "tables/playerdat.hpp"
+#include "utils/format.hpp"
+#include "utils/format_int.hpp"
+#include "utils/language.h"
 
 namespace devilution {
 
 namespace {
 
-constexpr int BAR_WIDTH = 307;
+constexpr int BarWidth = 307;
 
 using ColorGradient = std::array<Uint8, 12>;
-constexpr ColorGradient GOLD_GRADIENT = { 0xCF, 0xCE, 0xCD, 0xCC, 0xCB, 0xCA, 0xC9, 0xC8, 0xC7, 0xC6, 0xC5, 0xC4 };
-constexpr ColorGradient SILVER_GRADIENT = { 0xFE, 0xFD, 0xFC, 0xFB, 0xFA, 0xF9, 0xF8, 0xF7, 0xF6, 0xF5, 0xF4, 0xF3 };
+constexpr ColorGradient GoldGradient = { 0xCF, 0xCE, 0xCD, 0xCC, 0xCB, 0xCA, 0xC9, 0xC8, 0xC7, 0xC6, 0xC5, 0xC4 };
+constexpr ColorGradient SilverGradient = { 0xFE, 0xFD, 0xFC, 0xFB, 0xFA, 0xF9, 0xF8, 0xF7, 0xF6, 0xF5, 0xF4, 0xF3 };
 
-constexpr int BACK_WIDTH = 313;
-constexpr int BACK_HEIGHT = 9;
+constexpr int BackWidth = 313;
+constexpr int BackHeight = 9;
 
-Art xpbarArt;
+OptionalOwnedClxSpriteList xpbarArt;
 
-void DrawBar(const CelOutputBuffer &out, int x, int y, int width, const ColorGradient &gradient)
+void DrawBar(const Surface &out, Point screenPosition, int width, const ColorGradient &gradient)
 {
-	FastDrawHorizLine(out, x, y + 1, width, gradient[gradient.size() * 3 / 4 - 1]);
-	FastDrawHorizLine(out, x, y + 2, width, gradient[gradient.size() - 1]);
-	FastDrawHorizLine(out, x, y + 3, width, gradient[gradient.size() / 2 - 1]);
+	UnsafeDrawHorizontalLine(out, screenPosition + Displacement { 0, 1 }, width, gradient[(gradient.size() * 3 / 4) - 1]);
+	UnsafeDrawHorizontalLine(out, screenPosition + Displacement { 0, 2 }, width, gradient[gradient.size() - 1]);
+	UnsafeDrawHorizontalLine(out, screenPosition + Displacement { 0, 3 }, width, gradient[(gradient.size() / 2) - 1]);
 }
 
-void DrawEndCap(const CelOutputBuffer &out, int x, int y, int idx, const ColorGradient &gradient)
+void DrawEndCap(const Surface &out, Point point, int idx, const ColorGradient &gradient)
 {
-	SetPixel(out, x, y + 1, gradient[idx * 3 / 4]);
-	SetPixel(out, x, y + 2, gradient[idx]);
-	SetPixel(out, x, y + 3, gradient[idx / 2]);
+	out.SetPixel({ point.x, point.y + 1 }, gradient[idx * 3 / 4]);
+	out.SetPixel({ point.x, point.y + 2 }, gradient[idx]);
+	out.SetPixel({ point.x, point.y + 3 }, gradient[idx / 2]);
 }
+
+void OptionExperienceBarChanged()
+{
+	if (!gbRunGame)
+		return;
+	if (*GetOptions().Gameplay.experienceBar)
+		InitXPBar();
+	else
+		FreeXPBar();
+}
+
+const auto OptionChangeHandler = (GetOptions().Gameplay.experienceBar.SetValueChangedCallback(OptionExperienceBarChanged), true);
 
 } // namespace
 
 void InitXPBar()
 {
-	if (sgOptions.Gameplay.bExperienceBar) {
-		LoadMaskedArt("data\\xpbar.pcx", &xpbarArt, 1, 1);
-
-		if (xpbarArt.surface == nullptr) {
-			app_fatal("Failed to load UI resources. Is devilutionx.mpq accessible and up to date?");
-		}
+	if (*GetOptions().Gameplay.experienceBar) {
+		xpbarArt = LoadClx("data\\xpbar.clx");
 	}
 }
 
 void FreeXPBar()
 {
-	xpbarArt.Unload();
+	xpbarArt = std::nullopt;
 }
 
-void DrawXPBar(const CelOutputBuffer &out)
+void DrawXPBar(const Surface &out)
 {
-	if (!sgOptions.Gameplay.bExperienceBar)
+	if (!*GetOptions().Gameplay.experienceBar || ChatFlag)
 		return;
 
-	const PlayerStruct &player = plr[myplr];
+	const Player &player = *MyPlayer;
+	const Rectangle &mainPanel = GetMainPanel();
 
-	const int backX = PANEL_LEFT + PANEL_WIDTH / 2 - 155;
-	const int backY = PANEL_TOP + PANEL_HEIGHT - 11;
+	const Point back = { mainPanel.position.x + (mainPanel.size.width / 2) - 155, mainPanel.position.y + mainPanel.size.height - 11 };
+	const Point position = back + Displacement { 3, 2 };
 
-	const int xPos = backX + 3;
-	const int yPos = backY + 2;
+	RenderClxSprite(out, (*xpbarArt)[0], back);
 
-	DrawArt(out, backX, backY, &xpbarArt);
-
-	const int charLevel = player._pLevel;
-
-	if (charLevel == MAXCHARLEVEL - 1) {
+	if (player.isMaxCharacterLevel()) {
 		// Draw a nice golden bar for max level characters.
-		DrawBar(out, xPos, yPos, BAR_WIDTH, GOLD_GRADIENT);
+		DrawBar(out, position, BarWidth, GoldGradient);
 
 		return;
 	}
 
-	const int prevXp = ExpLvlsTbl[charLevel - 1];
+	const uint8_t charLevel = player.getCharacterLevel();
+
+	const uint64_t prevXp = GetNextExperienceThresholdForLevel(charLevel - 1);
 	if (player._pExperience < prevXp)
 		return;
 
-	Uint64 prevXpDelta_1 = player._pExperience - prevXp;
-	Uint64 prevXpDelta = ExpLvlsTbl[charLevel] - prevXp;
-	Uint64 fullBar = BAR_WIDTH * prevXpDelta_1 / prevXpDelta;
+	const uint64_t prevXpDelta1 = player._pExperience - prevXp;
+	const uint64_t prevXpDelta = GetNextExperienceThresholdForLevel(charLevel) - prevXp;
+	const uint64_t fullBar = BarWidth * prevXpDelta1 / prevXpDelta;
 
 	// Figure out how much to fill the last pixel of the XP bar, to make it gradually appear with gained XP
-	Uint64 onePx = prevXpDelta / BAR_WIDTH + 1;
-	Uint64 lastFullPx = fullBar * prevXpDelta / BAR_WIDTH;
+	const uint64_t onePx = (prevXpDelta / BarWidth) + 1;
+	const uint64_t lastFullPx = fullBar * prevXpDelta / BarWidth;
 
-	const Uint64 fade = (prevXpDelta_1 - lastFullPx) * (SILVER_GRADIENT.size() - 1) / onePx;
+	const uint64_t fade = (prevXpDelta1 - lastFullPx) * (SilverGradient.size() - 1) / onePx;
 
 	// Draw beginning of bar full brightness
-	DrawBar(out, xPos, yPos, fullBar, SILVER_GRADIENT);
+	DrawBar(out, position, static_cast<int>(fullBar), SilverGradient);
 
 	// End pixels appear gradually
-	DrawEndCap(out, xPos + fullBar, yPos, fade, SILVER_GRADIENT);
+	DrawEndCap(out, position + Displacement { static_cast<int>(fullBar), 0 }, static_cast<int>(fade), SilverGradient);
 }
 
 bool CheckXPBarInfo()
 {
-	if (!sgOptions.Gameplay.bExperienceBar)
+	if (!*GetOptions().Gameplay.experienceBar)
+		return false;
+	const Rectangle &mainPanel = GetMainPanel();
+
+	const int backX = mainPanel.position.x + (mainPanel.size.width / 2) - 155;
+	const int backY = mainPanel.position.y + mainPanel.size.height - 11;
+
+	if (MousePosition.x < backX || MousePosition.x >= backX + BackWidth || MousePosition.y < backY || MousePosition.y >= backY + BackHeight)
 		return false;
 
-	const int backX = PANEL_LEFT + PANEL_WIDTH / 2 - 155;
-	const int backY = PANEL_TOP + PANEL_HEIGHT - 11;
+	const Player &player = *MyPlayer;
 
-	if (MouseX < backX || MouseX >= backX + BACK_WIDTH || MouseY < backY || MouseY >= backY + BACK_HEIGHT)
-		return false;
+	const uint8_t charLevel = player.getCharacterLevel();
 
-	const PlayerStruct &player = plr[myplr];
+	AddInfoBoxString(FormatRuntime(_("Level {:d}"), charLevel));
 
-	const int charLevel = player._pLevel;
-
-	sprintf(tempstr, "Level %d", charLevel);
-	AddPanelString(tempstr, true);
-
-	if (charLevel == MAXCHARLEVEL - 1) {
+	if (player.isMaxCharacterLevel()) {
 		// Show a maximum level indicator for max level players.
-		infoclr = COL_GOLD;
+		InfoColor = UiFlags::ColorWhitegold;
 
-		sprintf(tempstr, "Experience: ");
-		PrintWithSeparator(tempstr + SDL_arraysize("Experience: ") - 1, ExpLvlsTbl[charLevel - 1]);
-		AddPanelString(tempstr, true);
-
-		AddPanelString("Maximum Level", true);
+		AddInfoBoxString(FormatRuntime(_("Experience: {:s}"), FormatInteger(player._pExperience)));
+		AddInfoBoxString(_("Maximum Level"));
 
 		return true;
 	}
 
-	infoclr = COL_WHITE;
+	InfoColor = UiFlags::ColorWhite;
 
-	sprintf(tempstr, "Experience: ");
-	PrintWithSeparator(tempstr + SDL_arraysize("Experience: ") - 1, player._pExperience);
-	AddPanelString(tempstr, true);
-
-	sprintf(tempstr, "Next Level: ");
-	PrintWithSeparator(tempstr + SDL_arraysize("Next Level: ") - 1, ExpLvlsTbl[charLevel]);
-	AddPanelString(tempstr, true);
-
-	sprintf(PrintWithSeparator(tempstr, ExpLvlsTbl[charLevel] - player._pExperience), " to Level %d", charLevel + 1);
-	AddPanelString(tempstr, true);
+	AddInfoBoxString(FormatRuntime(_("Experience: {:s}"), FormatInteger(player._pExperience)));
+	const uint32_t nextExperienceThreshold = player.getNextExperienceThreshold();
+	AddInfoBoxString(FormatRuntime(_("Next Level: {:s}"), FormatInteger(nextExperienceThreshold)));
+	AddInfoBoxString(FormatRuntime(_("{:s} to Level {:d}"), FormatInteger(nextExperienceThreshold - player._pExperience), charLevel + 1));
 
 	return true;
 }

@@ -3,17 +3,42 @@
  *
  * Implementation of routines for initializing the environment, disable screen saver, load MPQ.
  */
-#include <SDL.h>
-#include <config.h>
+#include "init.hpp"
+
+#include <cstdint>
 #include <string>
 #include <vector>
 
+#ifdef USE_SDL3
+#include <SDL3/SDL_events.h>
+#include <SDL3/SDL_video.h>
+#else
+#include <SDL.h>
+#endif
+
+#include <config.h>
+
 #include "DiabloUI/diabloui.h"
-#include "dx.h"
+#include "engine/assets.hpp"
+#include "engine/backbuffer_state.hpp"
+#include "engine/dx.h"
+#include "engine/events.hpp"
+#include "game_mode.hpp"
+#include "headless_mode.hpp"
+#include "hwcursor.hpp"
+#include "options.h"
 #include "pfile.h"
-#include "storm/storm.h"
+#include "utils/file_util.h"
+#include "utils/language.h"
+#include "utils/log.hpp"
 #include "utils/paths.h"
+#include "utils/str_split.hpp"
 #include "utils/ui_fwd.h"
+#include "utils/utf8.hpp"
+
+#ifndef UNPACKED_MPQS
+#include "mpq/mpq_reader.hpp"
+#endif
 
 #ifdef __vita__
 // increase default allowed heap size on Vita
@@ -22,206 +47,89 @@ int _newlib_heap_size_user = 100 * 1024 * 1024;
 
 namespace devilution {
 
-/** True if the game is the current active window */
 bool gbActive;
-/** A handle to an hellfire.mpq archive. */
-HANDLE hellfire_mpq;
-/** The current input handler function */
-WNDPROC CurrentProc;
-/** A handle to the spawn.mpq archive. */
-HANDLE spawn_mpq;
-/** A handle to the diabdat.mpq archive. */
-HANDLE diabdat_mpq;
-/** A handle to the patch_rt.mpq archive. */
-HANDLE patch_rt_mpq;
-/** Indicate if we only have access to demo data */
-bool gbIsSpawn;
-/** Indicate if we have loaded the Hellfire expansion data */
-bool gbIsHellfire;
-/** Indicate if we want vanilla savefiles */
-bool gbVanilla;
-HANDLE hfmonk_mpq;
-HANDLE hfbard_mpq;
-HANDLE hfbarb_mpq;
-HANDLE hfmusic_mpq;
-HANDLE hfvoice_mpq;
-HANDLE hfopt1_mpq;
-HANDLE hfopt2_mpq;
-HANDLE devilutionx_mpq;
 
 namespace {
 
-HANDLE init_test_access(const std::vector<std::string> &paths, const char *mpq_name)
-{
-	HANDLE archive;
-	std::string mpq_abspath;
-	for (const auto &path : paths) {
-		mpq_abspath = path + mpq_name;
-		if (SFileOpenArchive(mpq_abspath.c_str(), 0, MPQ_OPEN_READ_ONLY, &archive)) {
-			SDL_LogVerbose(SDL_LOG_CATEGORY_APPLICATION, "  Found: %s in %s", mpq_name, path.c_str());
-			SFileSetBasePath(path.c_str());
-			return archive;
-		}
-		if (SErrGetLastError() != STORM_ERROR_FILE_NOT_FOUND) {
-			SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Open error %u: %s", SErrGetLastError(), mpq_abspath.c_str());
-		}
-	}
-	if (SErrGetLastError() == STORM_ERROR_FILE_NOT_FOUND) {
-		SDL_LogVerbose(SDL_LOG_CATEGORY_APPLICATION, "Missing: %s", mpq_name);
-	}
+constexpr char DevilutionXMpqVersion[] = "1\n";
+constexpr char ExtraFontsVersion[] = "1\n";
 
-	return nullptr;
+bool AssetContentsEq(AssetRef &&ref, std::string_view expected)
+{
+	const size_t size = ref.size();
+	AssetHandle handle = OpenAsset(std::move(ref), false);
+	if (!handle.ok()) return false;
+	const std::unique_ptr<char[]> contents { new char[size] };
+	if (!handle.read(contents.get(), size)) return false;
+	return std::string_view { contents.get(), size } == expected;
+}
+
+bool CheckDevilutionXMpqVersion(AssetRef &&ref)
+{
+	return !AssetContentsEq(std::move(ref), DevilutionXMpqVersion);
+}
+
+bool CheckExtraFontsVersion(AssetRef &&ref)
+{
+	return !AssetContentsEq(std::move(ref), ExtraFontsVersion);
 }
 
 } // namespace
 
-/* data */
+bool IsDevilutionXMpqOutOfDate()
+{
+	AssetRef ref = FindAsset("ASSETS_VERSION");
+	if (!ref.ok())
+		return true;
+	return CheckDevilutionXMpqVersion(std::move(ref));
+}
 
-char gszVersionNumber[64] = "internal version unknown";
-char gszProductName[64] = "DevilutionX vUnknown";
+#ifdef UNPACKED_MPQS
+bool AreExtraFontsOutOfDate(std::string_view path)
+{
+	const std::string versionPath = StrCat(path, "fonts" DIRECTORY_SEPARATOR_STR "VERSION");
+	if (versionPath.size() + 1 > AssetRef::PathBufSize)
+		app_fatal("Path too long");
+	AssetRef ref;
+	*BufCopy(ref.path, versionPath) = '\0';
+	return CheckExtraFontsVersion(std::move(ref));
+}
+#else
+bool AreExtraFontsOutOfDate(MpqArchive &archive)
+{
+	const char filename[] = "fonts\\VERSION";
+	if (!archive.HasFile(filename))
+		return true;
+	AssetRef ref;
+	ref.archive = &archive;
+	ref.filename = filename;
+	return CheckExtraFontsVersion(std::move(ref));
+}
+#endif
+
+bool AreExtraFontsOutOfDate()
+{
+	const auto it = MpqArchives.find(FontMpqPriority);
+	return it != MpqArchives.end() && AreExtraFontsOutOfDate(it->second);
+}
 
 void init_cleanup()
 {
 	if (gbIsMultiplayer && gbRunGame) {
-		pfile_write_hero(/*write_game_data=*/false, /*clear_tables=*/true);
+		pfile_write_hero(/*writeGameData=*/false);
+		sfile_write_stash();
 	}
 
-	if (spawn_mpq) {
-		SFileCloseArchive(spawn_mpq);
-		spawn_mpq = nullptr;
-	}
-	if (diabdat_mpq) {
-		SFileCloseArchive(diabdat_mpq);
-		diabdat_mpq = nullptr;
-	}
-	if (patch_rt_mpq) {
-		SFileCloseArchive(patch_rt_mpq);
-		patch_rt_mpq = nullptr;
-	}
-	if (hellfire_mpq) {
-		SFileCloseArchive(hellfire_mpq);
-		hellfire_mpq = nullptr;
-	}
-	if (hfmonk_mpq) {
-		SFileCloseArchive(hfmonk_mpq);
-		hfmonk_mpq = nullptr;
-	}
-	if (hfbard_mpq) {
-		SFileCloseArchive(hfbard_mpq);
-		hfbard_mpq = nullptr;
-	}
-	if (hfbarb_mpq) {
-		SFileCloseArchive(hfbarb_mpq);
-		hfbarb_mpq = nullptr;
-	}
-	if (hfmusic_mpq) {
-		SFileCloseArchive(hfmusic_mpq);
-		hfmusic_mpq = nullptr;
-	}
-	if (hfvoice_mpq) {
-		SFileCloseArchive(hfvoice_mpq);
-		hfvoice_mpq = nullptr;
-	}
-	if (hfopt1_mpq) {
-		SFileCloseArchive(hfopt1_mpq);
-		hfopt1_mpq = nullptr;
-	}
-	if (hfopt2_mpq) {
-		SFileCloseArchive(hfopt2_mpq);
-		hfopt2_mpq = nullptr;
-	}
-	if (devilutionx_mpq) {
-		SFileCloseArchive(patch_rt_mpq);
-		patch_rt_mpq = nullptr;
-	}
+	MpqArchives.clear();
+	HasHellfireMpq = false;
 
 	NetClose();
-}
-
-static void init_get_file_info()
-{
-	snprintf(gszProductName, sizeof(gszProductName) / sizeof(char), "%s v%s", PROJECT_NAME, PROJECT_VERSION);
-	snprintf(gszVersionNumber, sizeof(gszVersionNumber) / sizeof(char), "version %s", PROJECT_VERSION);
-}
-
-void init_archives()
-{
-	init_get_file_info();
-
-	std::vector<std::string> paths;
-	paths.reserve(5);
-	paths.push_back(GetBasePath());
-	paths.push_back(GetPrefPath());
-	if (paths[0] == paths[1])
-		paths.pop_back();
-
-#ifdef __linux__
-	paths.emplace_back("/usr/share/diasurgical/devilutionx/");
-	paths.emplace_back("/usr/local/share/diasurgical/devilutionx/");
-#endif
-
-	paths.emplace_back(""); // PWD
-
-	if (SDL_LOG_PRIORITY_VERBOSE >= SDL_LogGetPriority(SDL_LOG_CATEGORY_APPLICATION)) {
-		std::string message;
-		for (std::size_t i = 0; i < paths.size(); ++i) {
-			char prefix[32];
-			std::snprintf(prefix, sizeof(prefix), "\n%6u. '", static_cast<unsigned>(i + 1));
-			message.append(prefix);
-			message.append(paths[i]);
-			message += '\'';
-		}
-		SDL_LogVerbose(SDL_LOG_CATEGORY_APPLICATION,
-		    "MPQ search paths%s", message.c_str());
-	}
-
-	diabdat_mpq = init_test_access(paths, "DIABDAT.MPQ");
-	if (diabdat_mpq == nullptr) {
-		// DIABDAT.MPQ is uppercase on the original CD and the GOG version.
-		diabdat_mpq = init_test_access(paths, "diabdat.mpq");
-	}
-
-	if (diabdat_mpq == nullptr) {
-		spawn_mpq = init_test_access(paths, "spawn.mpq");
-		if (spawn_mpq != nullptr)
-			gbIsSpawn = true;
-	}
-	HANDLE fh = nullptr;
-	if (!SFileOpenFile("ui_art\\title.pcx", &fh))
-		InsertCDDlg();
-	SFileCloseFile(fh);
-
-	patch_rt_mpq = init_test_access(paths, "patch_rt.mpq");
-	if (patch_rt_mpq == nullptr)
-		patch_rt_mpq = init_test_access(paths, "patch_sh.mpq");
-
-	hellfire_mpq = init_test_access(paths, "hellfire.mpq");
-	if (hellfire_mpq != nullptr)
-		gbIsHellfire = true;
-	hfmonk_mpq = init_test_access(paths, "hfmonk.mpq");
-	hfbard_mpq = init_test_access(paths, "hfbard.mpq");
-	if (hfbard_mpq != nullptr)
-		gbBard = true;
-	hfbarb_mpq = init_test_access(paths, "hfbarb.mpq");
-	if (hfbarb_mpq != nullptr)
-		gbBarbarian = true;
-	hfmusic_mpq = init_test_access(paths, "hfmusic.mpq");
-	hfvoice_mpq = init_test_access(paths, "hfvoice.mpq");
-	hfopt1_mpq = init_test_access(paths, "hfopt1.mpq");
-	hfopt2_mpq = init_test_access(paths, "hfopt2.mpq");
-
-	if (gbIsHellfire && (hfmonk_mpq == nullptr || hfmusic_mpq == nullptr || hfvoice_mpq == nullptr)) {
-		UiErrorOkDialog("Some Hellfire MPQs are missing", "Not all Hellfire MPQs were found.\nPlease copy all the hf*.mpq files.");
-		app_fatal(nullptr);
-	}
-
-	devilutionx_mpq = init_test_access(paths, "devilutionx.mpq");
 }
 
 void init_create_window()
 {
 	if (!SpawnWindow(PROJECT_NAME))
-		app_fatal("Unable to create main window");
+		app_fatal(_("Unable to create main window"));
 	dx_init();
 	gbActive = true;
 #ifndef USE_SDL1
@@ -229,25 +137,101 @@ void init_create_window()
 #endif
 }
 
-void MainWndProc(UINT Msg)
+void MainWndProc(const SDL_Event &event)
 {
-	switch (Msg) {
-	case DVL_WM_PAINT:
-		force_redraw = 255;
+#ifndef USE_SDL1
+#ifdef USE_SDL3
+	switch (event.type)
+#else
+	if (event.type != SDL_WINDOWEVENT) return;
+	switch (event.window.event)
+#endif
+	{
+#ifdef USE_SDL3
+	case SDL_EVENT_WINDOW_HIDDEN:
+	case SDL_EVENT_WINDOW_MINIMIZED:
+#else
+	case SDL_WINDOWEVENT_HIDDEN:
+	case SDL_WINDOWEVENT_MINIMIZED:
+#endif
+		gbActive = false;
 		break;
-	case DVL_WM_QUERYENDSESSION:
+#ifdef USE_SDL3
+	case SDL_EVENT_WINDOW_SHOWN:
+	case SDL_EVENT_WINDOW_EXPOSED:
+	case SDL_EVENT_WINDOW_RESTORED:
+#else
+	case SDL_WINDOWEVENT_SHOWN:
+	case SDL_WINDOWEVENT_EXPOSED:
+	case SDL_WINDOWEVENT_RESTORED:
+#endif
+		gbActive = true;
+		RedrawEverything();
+		break;
+#ifdef USE_SDL3
+	case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
+#else
+	case SDL_WINDOWEVENT_SIZE_CHANGED:
+#endif
+		ReinitializeHardwareCursor();
+		break;
+#ifdef USE_SDL3
+	case SDL_EVENT_WINDOW_MOUSE_LEAVE:
+#else
+	case SDL_WINDOWEVENT_LEAVE:
+#endif
+		sgbMouseDown = CLICK_NONE;
+		LastPlayerAction = PlayerActionType::None;
+		RedrawEverything();
+		break;
+#ifdef USE_SDL3
+	case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
+#else
+	case SDL_WINDOWEVENT_CLOSE:
+#endif
 		diablo_quit(0);
 		break;
+#ifdef USE_SDL3
+	case SDL_EVENT_WINDOW_FOCUS_LOST:
+#else
+	case SDL_WINDOWEVENT_FOCUS_LOST:
+#endif
+		if (*GetOptions().Gameplay.pauseOnFocusLoss)
+			diablo_focus_pause();
+		break;
+#ifdef USE_SDL3
+	case SDL_EVENT_WINDOW_FOCUS_GAINED:
+#else
+	case SDL_WINDOWEVENT_FOCUS_GAINED:
+#endif
+		if (*GetOptions().Gameplay.pauseOnFocusLoss)
+			diablo_focus_unpause();
+		break;
+#ifdef USE_SDL3
+	default:
+		break;
+#else
+	case SDL_WINDOWEVENT_MOVED:
+	case SDL_WINDOWEVENT_RESIZED:
+	case SDL_WINDOWEVENT_MAXIMIZED:
+	case SDL_WINDOWEVENT_ENTER:
+	case SDL_WINDOWEVENT_TAKE_FOCUS:
+		break;
+	default:
+		LogVerbose("Unhandled SDL_WINDOWEVENT event: {:d}", event.window.event);
+		break;
+#endif
 	}
-}
-
-WNDPROC SetWindowProc(WNDPROC NewProc)
-{
-	WNDPROC OldProc;
-
-	OldProc = CurrentProc;
-	CurrentProc = NewProc;
-	return OldProc;
+#else
+	if (event.type != SDL_ACTIVEEVENT)
+		return;
+	if ((event.active.state & SDL_APPINPUTFOCUS) != 0) {
+		if (event.active.gain == 0)
+			diablo_focus_pause();
+		else
+			diablo_focus_unpause();
+	}
+#endif
 }
 
 } // namespace devilution

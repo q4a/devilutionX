@@ -1,8 +1,9 @@
 #include "./console.h"
 
-#if defined(_WIN64) || defined(_WIN32)
+#if defined(_WIN32) && !defined(DEVILUTIONX_WINDOWS_NO_WCHAR)
 #include <cstddef>
 #include <cstdio>
+#include <string>
 
 // Suppress definitions of `min` and `max` macros by <windows.h>:
 #define NOMINMAX 1
@@ -24,35 +25,45 @@ HANDLE GetStderrHandle()
 	return handle;
 }
 
-} // namespace
-
-void printInConsole(const char *fmt, ...)
+void WriteToStderr(std::string_view str)
 {
 	HANDLE handle = GetStderrHandle();
 	if (handle == NULL)
 		return;
+	WriteConsole(handle, str.data(), static_cast<DWORD>(str.size()), NULL, NULL);
+}
 
+} // namespace
+
+void printInConsole(std::string_view str)
+{
+	OutputDebugString(std::string(str).c_str());
+	WriteToStderr(str);
+}
+
+void printNewlineInConsole()
+{
+	OutputDebugString("\r\n");
+	WriteToStderr("\r\n");
+}
+
+void printfInConsole(const char *fmt, ...)
+{
 	char message[4096];
 	va_list ap;
 	va_start(ap, fmt);
 	std::vsnprintf(message, sizeof(message), fmt, ap);
 	va_end(ap);
-
-	WriteConsole(handle, message, strlen(message), NULL, NULL);
+	OutputDebugString(message);
+	WriteToStderr(message);
 }
 
-void printInConsoleV(const char *fmt, va_list ap)
+void vprintfInConsole(const char *fmt, va_list ap)
 {
-	HANDLE handle = GetStderrHandle();
-	if (handle == NULL)
-		return;
-
 	char message[4096];
 	std::vsnprintf(message, sizeof(message), fmt, ap);
-
-	if (handle == NULL)
-		return;
-	WriteConsole(handle, message, strlen(message), NULL, NULL);
+	OutputDebugString(message);
+	WriteToStderr(message);
 }
 
 } // namespace devilution
@@ -61,7 +72,17 @@ void printInConsoleV(const char *fmt, va_list ap)
 
 namespace devilution {
 
-void printInConsole(const char *fmt, ...)
+void printInConsole(std::string_view str)
+{
+	std::fwrite(str.data(), sizeof(char), str.size(), stderr);
+}
+
+void printNewlineInConsole()
+{
+	std::fputs("\n", stderr);
+}
+
+void printfInConsole(const char *fmt, ...)
 {
 	std::va_list ap;
 	va_start(ap, fmt);
@@ -69,7 +90,7 @@ void printInConsole(const char *fmt, ...)
 	va_end(ap);
 }
 
-void printInConsoleV(const char *fmt, std::va_list ap)
+void vprintfInConsole(const char *fmt, std::va_list ap)
 {
 	std::vfprintf(stderr, fmt, ap);
 }

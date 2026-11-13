@@ -1,19 +1,19 @@
 #include <gtest/gtest.h>
 
 #include "dead.h"
-#include "engine.h"
-#include "gendung.h"
+#include "engine/render/primitive_render.hpp"
+#include "levels/gendung.h"
 
 using namespace devilution;
 
-TEST(Dead, AddDead)
+TEST(Corpses, AddCorpse)
 {
-	AddDead(21, 48, 8, DIR_W);
-	EXPECT_EQ(dDead[21][48], 8 + (DIR_W << 5));
+	AddCorpse({ 21, 48 }, 8, Direction::West);
+	EXPECT_EQ(dCorpse[21][48], 8 + (static_cast<int>(Direction::West) << 5));
 }
 
-TEST(Dead, AddDead_OOB)
+TEST(Corpses, AddCorpse_OOB)
 {
-	AddDead(21, 48, MAXDEAD + 1, DIR_W);
-	EXPECT_EQ(dDead[21][48], 0 + (DIR_W << 5));
+	AddCorpse({ 21, 48 }, MaxCorpses + 1, Direction::West);
+	EXPECT_EQ(dCorpse[21][48], 0 + (static_cast<int>(Direction::West) << 5));
 }

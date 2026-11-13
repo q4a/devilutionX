@@ -1,112 +1,78 @@
 #include <algorithm>
-#include <memory>
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <string>
+#include <string_view>
 #include <vector>
 
-#include "DiabloUI/art.h"
-#include "DiabloUI/art_draw.h"
+#ifdef USE_SDL3
+#include <SDL3/SDL_events.h>
+#include <SDL3/SDL_rect.h>
+#include <SDL3/SDL_surface.h>
+#include <SDL3/SDL_timer.h>
+#else
+#include <SDL.h>
+#endif
+
 #include "DiabloUI/credits_lines.h"
 #include "DiabloUI/diabloui.h"
-#include "DiabloUI/fonts.h"
 #include "DiabloUI/support_lines.h"
-#include "control.h"
+#include "DiabloUI/ui_flags.hpp"
+#include "controls/input.h"
 #include "controls/menu_controls.h"
+#include "engine/load_clx.hpp"
+#include "engine/point.hpp"
+#include "engine/render/clx_render.hpp"
+#include "engine/render/text_render.hpp"
+#include "engine/surface.hpp"
+#include "hwcursor.hpp"
 #include "utils/display.h"
+#include "utils/is_of.hpp"
+#include "utils/language.h"
 #include "utils/sdl_compat.h"
-#include "utils/sdl_ptrs.h"
+#include "utils/sdl_geometry.h"
+#include "utils/ui_fwd.h"
 
 namespace devilution {
 
 namespace {
 
 const SDL_Rect VIEWPORT = { 0, 114, 640, 251 };
-const int ShadowOffsetX = 2;
-const int ShadowOffsetY = 2;
 const int LINE_H = 22;
-
-char const *const *text;
-std::size_t textLines;
 
 // The maximum number of visible lines is the number of whole lines
 // (VIEWPORT.h / LINE_H) rounded up, plus one extra line for when
 // a line is leaving the screen while another one is entering.
 #define MAX_VISIBLE_LINES ((VIEWPORT.h - 1) / LINE_H + 2)
 
-struct CachedLine {
-
-	CachedLine()
-	{
-		m_index = 0;
-		palette_version = pal_surface_palette_version;
-	}
-
-	CachedLine(std::size_t index, SDLSurfaceUniquePtr surface)
-	{
-		m_index = index;
-		m_surface = std::move(surface);
-		palette_version = pal_surface_palette_version;
-	}
-
-	std::size_t m_index;
-	SDLSurfaceUniquePtr m_surface;
-	unsigned int palette_version;
-};
-
-SDL_Surface *RenderText(const char *text, SDL_Color color)
-{
-	if (text[0] == '\0')
-		return nullptr;
-	SDL_Surface *result = TTF_RenderUTF8_Solid(font, text, color);
-	if (result == nullptr)
-		SDL_Log("%s", TTF_GetError());
-	return result;
-}
-
-CachedLine PrepareLine(std::size_t index)
-{
-	const char *contents = text[index];
-	while (contents[0] == '\t')
-		++contents;
-
-	const SDL_Color shadowColor = { 0, 0, 0, 0 };
-	SDLSurfaceUniquePtr text { RenderText(contents, shadowColor) };
-
-	// Precompose shadow and text:
-	SDLSurfaceUniquePtr surface;
-	if (text != nullptr) {
-		// Set up the target surface to have 3 colors: mask, text, and shadow.
-		surface = SDLSurfaceUniquePtr { SDL_CreateRGBSurfaceWithFormat(0, text->w + ShadowOffsetX, text->h + ShadowOffsetY, 8, SDL_PIXELFORMAT_INDEX8) };
-		const SDL_Color maskColor = { 0, 255, 0, 0 }; // Any color different from both shadow and text
-		const SDL_Color &textColor = palette->colors[224];
-		SDL_Color colors[3] = { maskColor, textColor, shadowColor };
-		if (SDLC_SetSurfaceColors(surface.get(), colors, 0, 3) <= -1)
-			SDL_Log("%s", SDL_GetError());
-		SDLC_SetColorKey(surface.get(), 0);
-
-		// Blit the shadow first:
-		SDL_Rect shadowRect = { ShadowOffsetX, ShadowOffsetY, 0, 0 };
-		if (SDL_BlitSurface(text.get(), nullptr, surface.get(), &shadowRect) <= -1)
-			ErrSdl();
-
-		// Change the text surface color and blit again:
-		SDL_Color textColors[2] = { maskColor, textColor };
-		if (SDLC_SetSurfaceColors(text.get(), textColors, 0, 2) <= -1)
-			ErrSdl();
-		SDLC_SetColorKey(text.get(), 0);
-
-		if (SDL_BlitSurface(text.get(), nullptr, surface.get(), nullptr) <= -1)
-			ErrSdl();
-
-		surface = ScaleSurfaceToOutput(std::move(surface));
-	}
-	return CachedLine(index, std::move(surface));
-}
-
 class CreditsRenderer {
 
 public:
-	CreditsRenderer()
+	CreditsRenderer(const char *const *text, std::size_t textLines)
 	{
-		LoadTtfFont();
+		for (size_t i = 0; i < textLines; i++) {
+			const std::string_view orgText = _(text[i]);
+
+			uint16_t offset = 0;
+			size_t indexFirstNotTab = 0;
+			while (indexFirstNotTab < orgText.size() && orgText[indexFirstNotTab] == '\t') {
+				offset += 40;
+				indexFirstNotTab++;
+			}
+
+			const std::string paragraphs = WordWrapString(orgText.substr(indexFirstNotTab), 580 - offset, FontSizeDialog);
+
+			size_t previous = 0;
+			while (true) {
+				const size_t next = paragraphs.find('\n', previous);
+				linesToRender.emplace_back(LineContent { offset, paragraphs.substr(previous, next - previous) });
+				if (next == std::string::npos)
+					break;
+				previous = next + 1;
+			}
+		}
+
 		ticks_begin_ = SDL_GetTicks();
 		prev_offset_y_ = 0;
 		finished_ = false;
@@ -114,21 +80,24 @@ public:
 
 	~CreditsRenderer()
 	{
-		ArtBackgroundWidescreen.Unload();
-		ArtBackground.Unload();
-		UnloadTtfFont();
-		lines_.clear();
+		ArtBackgroundWidescreen = std::nullopt;
+		ArtBackground = std::nullopt;
 	}
 
 	void Render();
 
-	bool Finished() const
+	[[nodiscard]] bool Finished() const
 	{
 		return finished_;
 	}
 
 private:
-	std::vector<CachedLine> lines_;
+	struct LineContent {
+		uint16_t offset;
+		std::string text;
+	};
+
+	std::vector<LineContent> linesToRender;
 	bool finished_;
 	Uint32 ticks_begin_;
 	int prev_offset_y_;
@@ -136,86 +105,75 @@ private:
 
 void CreditsRenderer::Render()
 {
-	const int offsetY = -VIEWPORT.h + (SDL_GetTicks() - ticks_begin_) / 40;
+	const int offsetY = -VIEWPORT.h + ((SDL_GetTicks() - ticks_begin_) / 40);
 	if (offsetY == prev_offset_y_)
 		return;
 	prev_offset_y_ = offsetY;
 
-	SDL_FillRect(DiabloUiSurface(), nullptr, 0x000000);
-	DrawArt(PANEL_LEFT - 320, UI_OFFSET_Y, &ArtBackgroundWidescreen);
-	DrawArt(PANEL_LEFT, UI_OFFSET_Y, &ArtBackground);
-	if (font == nullptr)
-		return;
+	SDL_FillSurfaceRect(DiabloUiSurface(), nullptr, 0);
+	const Point uiPosition = GetUIRectangle().position;
+	if (ArtBackgroundWidescreen)
+		RenderClxSprite(Surface(DiabloUiSurface()), (*ArtBackgroundWidescreen)[0], uiPosition - Displacement { 320, 0 });
+	RenderClxSprite(Surface(DiabloUiSurface()), (*ArtBackground)[0], uiPosition);
 
 	const std::size_t linesBegin = std::max(offsetY / LINE_H, 0);
-	const std::size_t linesEnd = std::min(linesBegin + MAX_VISIBLE_LINES, textLines);
+	const std::size_t linesEnd = std::min(linesBegin + MAX_VISIBLE_LINES, linesToRender.size());
 
 	if (linesBegin >= linesEnd) {
-		if (linesEnd == textLines)
+		if (linesEnd == linesToRender.size())
 			finished_ = true;
 		return;
 	}
 
-	while (linesEnd > lines_.size())
-		lines_.push_back(PrepareLine(lines_.size()));
-
 	SDL_Rect viewport = VIEWPORT;
-	viewport.x += PANEL_LEFT;
-	viewport.y += UI_OFFSET_Y;
+	viewport.x += uiPosition.x;
+	viewport.y += uiPosition.y;
 	ScaleOutputRect(&viewport);
-	SDL_SetClipRect(DiabloUiSurface(), &viewport);
 
 	// We use unscaled coordinates for calculation throughout.
-	Sint16 destY = UI_OFFSET_Y + VIEWPORT.y - (offsetY - linesBegin * LINE_H);
+	auto destY = static_cast<Sint16>(uiPosition.y + VIEWPORT.y - (offsetY - linesBegin * LINE_H));
 	for (std::size_t i = linesBegin; i < linesEnd; ++i, destY += LINE_H) {
-		CachedLine &line = lines_[i];
-		if (line.m_surface == nullptr)
-			continue;
+		const Sint16 destX = uiPosition.x + VIEWPORT.x + 31;
 
-		// Still fading in: the cached line was drawn with a different fade level.
-		if (line.palette_version != pal_surface_palette_version) {
-			line = PrepareLine(line.m_index);
-		}
+		auto &lineContent = linesToRender[i];
 
-		Sint16 destX = PANEL_LEFT + VIEWPORT.x + 31;
-		int j = 0;
-		while (text[line.m_index][j++] == '\t')
-			destX += 40;
-
-		SDL_Rect dstRect = { destX, destY, 0, 0 };
+		SDL_Rect dstRect = MakeSdlRect(destX + lineContent.offset, destY, 0, 0);
 		ScaleOutputRect(&dstRect);
-		dstRect.w = line.m_surface->w;
-		dstRect.h = line.m_surface->h;
-		if (SDL_BlitSurface(line.m_surface.get(), nullptr, DiabloUiSurface(), &dstRect) < 0)
-			ErrSdl();
+		dstRect.x -= viewport.x;
+		dstRect.y -= viewport.y;
+
+		const Surface &out = Surface(DiabloUiSurface(), viewport);
+		DrawString(out, lineContent.text, Point { dstRect.x, dstRect.y },
+		    { .flags = UiFlags::FontSizeDialog | UiFlags::ColorDialogWhite, .spacing = -1 });
 	}
-	SDL_SetClipRect(DiabloUiSurface(), nullptr);
 }
 
-bool TextDialog()
+bool TextDialog(const char *const *text, std::size_t textLines)
 {
-	CreditsRenderer creditsRenderer;
+	CreditsRenderer creditsRenderer(text, textLines);
 	bool endMenu = false;
+
+	if (IsHardwareCursor())
+		SetHardwareCursorVisible(false);
 
 	SDL_Event event;
 	do {
 		creditsRenderer.Render();
 		UiFadeIn();
-		while (SDL_PollEvent(&event) != 0) {
+		while (PollEvent(&event)) {
 			switch (event.type) {
-			case SDL_KEYDOWN:
-			case SDL_MOUSEBUTTONDOWN:
+			case SDL_EVENT_KEY_DOWN:
+			case SDL_EVENT_MOUSE_BUTTON_UP:
 				endMenu = true;
 				break;
 			default:
-				switch (GetMenuAction(event)) {
-				case MenuAction_BACK:
-				case MenuAction_SELECT:
+				for (const MenuAction menuAction : GetMenuActions(event)) {
+					if (IsNoneOf(menuAction, MenuAction_BACK, MenuAction_SELECT))
+						continue;
 					endMenu = true;
 					break;
-				default:
-					break;
 				}
+				break;
 			}
 			UiHandleEvents(&event);
 		}
@@ -228,29 +186,23 @@ bool TextDialog()
 
 bool UiCreditsDialog()
 {
-	text = CREDITS_LINES;
-	textLines = CREDITS_LINES_SIZE;
+	ArtBackgroundWidescreen = LoadOptionalClx("ui_art\\creditsw.clx");
+	LoadBackgroundArt("ui_art\\credits");
 
-	LoadArt("ui_art\\creditsw.pcx", &ArtBackgroundWidescreen);
-	LoadBackgroundArt("ui_art\\credits.pcx");
-
-	return TextDialog();
+	return TextDialog(CreditLines, CreditLinesSize);
 }
 
 bool UiSupportDialog()
 {
-	text = SUPPORT_LINES;
-	textLines = SUPPORT_LINES_SIZE;
-
-	if (gbIsHellfire) {
-		LoadArt("ui_art\\supportw.pcx", &ArtBackgroundWidescreen);
-		LoadBackgroundArt("ui_art\\support.pcx");
+	ArtBackgroundWidescreen = LoadOptionalClx("ui_art\\supportw.clx");
+	if (ArtBackgroundWidescreen.has_value()) {
+		LoadBackgroundArt("ui_art\\support");
 	} else {
-		LoadArt("ui_art\\creditsw.pcx", &ArtBackgroundWidescreen);
-		LoadBackgroundArt("ui_art\\credits.pcx");
+		ArtBackgroundWidescreen = LoadOptionalClx("ui_art\\creditsw.clx");
+		LoadBackgroundArt("ui_art\\credits");
 	}
 
-	return TextDialog();
+	return TextDialog(SupportLines, SupportLinesSize);
 }
 
 } // namespace devilution

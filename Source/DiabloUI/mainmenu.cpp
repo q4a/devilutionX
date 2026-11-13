@@ -1,81 +1,100 @@
+#include <cstddef>
+#include <cstdint>
+#include <memory>
+#include <optional>
+#include <vector>
 
-#include "control.h"
+#ifdef USE_SDL3
+#include <SDL3/SDL_rect.h>
+#include <SDL3/SDL_timer.h>
+#else
+#include <SDL.h>
+#endif
+
 #include "DiabloUI/diabloui.h"
-#include "DiabloUI/selok.h"
+#include "DiabloUI/ui_flags.hpp"
+#include "DiabloUI/ui_item.h"
+#include "engine/assets.hpp"
+#include "engine/load_clx.hpp"
+#include "engine/point.hpp"
+#include "game_mode.hpp"
+#include "utils/language.h"
+#include "utils/ui_fwd.h"
 
 namespace devilution {
 namespace {
-int mainmenu_attract_time_out; //seconds
-DWORD dwAttractTicks;
+int mainmenu_attract_time_out; // seconds
+uint32_t dwAttractTicks;
 
-std::vector<UiItemBase *> vecMainMenuDialog;
-std::vector<UiListItem *> vecMenuItems;
+std::vector<std::unique_ptr<UiItemBase>> vecMainMenuDialog;
+std::vector<std::unique_ptr<UiListItem>> vecMenuItems;
 
 _mainmenu_selections MainMenuResult;
 
-void UiMainMenuSelect(int value)
+void UiMainMenuSelect(size_t value)
 {
 	MainMenuResult = (_mainmenu_selections)vecMenuItems[value]->m_value;
 }
 
+#ifndef NOEXIT
 void MainmenuEsc()
 {
-	std::size_t last = vecMenuItems.size() - 1;
+	const std::size_t last = vecMenuItems.size() - 1;
 	if (SelectedItem == last) {
 		UiMainMenuSelect(last);
 	} else {
 		SelectedItem = last;
 	}
 }
+#endif
 
-void MainmenuLoad(const char *name, void (*fnSound)(const char *file))
+void MainmenuLoad(const char *name)
 {
-	gfnSoundFunction = fnSound;
+	vecMenuItems.push_back(std::make_unique<UiListItem>(_("Single Player"), MAINMENU_SINGLE_PLAYER));
+	vecMenuItems.push_back(std::make_unique<UiListItem>(_("Multi Player"), MAINMENU_MULTIPLAYER));
+	vecMenuItems.push_back(std::make_unique<UiListItem>(_("Settings"), MAINMENU_SETTINGS));
+	vecMenuItems.push_back(std::make_unique<UiListItem>(_("Support"), MAINMENU_SHOW_SUPPORT));
+	vecMenuItems.push_back(std::make_unique<UiListItem>(_("Show Credits"), MAINMENU_SHOW_CREDITS));
+#ifndef NOEXIT
+	vecMenuItems.push_back(std::make_unique<UiListItem>(gbIsHellfire ? _("Exit Hellfire") : _("Exit Diablo"), MAINMENU_EXIT_DIABLO));
+#endif
 
-	vecMenuItems.push_back(new UiListItem("Single Player", MAINMENU_SINGLE_PLAYER));
-	vecMenuItems.push_back(new UiListItem("Multi Player", MAINMENU_MULTIPLAYER));
-	vecMenuItems.push_back(new UiListItem("Replay Intro", MAINMENU_REPLAY_INTRO));
-	vecMenuItems.push_back(new UiListItem("Support", MAINMENU_SHOW_SUPPORT));
-	if (gbIsHellfire) {
-		vecMenuItems.push_back(new UiListItem("Credits", MAINMENU_SHOW_CREDITS));
-		vecMenuItems.push_back(new UiListItem("Exit Hellfire", MAINMENU_EXIT_DIABLO));
+	if (!gbIsSpawn || gbIsHellfire) {
+		ArtBackgroundWidescreen = LoadOptionalClx("ui_art\\mainmenuw.clx");
+		LoadBackgroundArt("ui_art\\mainmenu");
 	} else {
-		vecMenuItems.push_back(new UiListItem("Show Credits", MAINMENU_SHOW_CREDITS));
-		vecMenuItems.push_back(new UiListItem("Exit Diablo", MAINMENU_EXIT_DIABLO));
-	}
-
-	if (!gbSpawned || gbIsHellfire) {
-		if (gbIsHellfire)
-			LoadArt("ui_art\\mainmenuw.pcx", &ArtBackgroundWidescreen);
-		LoadBackgroundArt("ui_art\\mainmenu.pcx");
-	} else {
-		LoadBackgroundArt("ui_art\\swmmenu.pcx");
+		LoadBackgroundArt("ui_art\\swmmenu");
 	}
 
 	UiAddBackground(&vecMainMenuDialog);
 	UiAddLogo(&vecMainMenuDialog);
 
-	vecMainMenuDialog.push_back(new UiList(vecMenuItems, PANEL_LEFT + 64, (UI_OFFSET_Y + 192), 510, 43, UIS_HUGE | UIS_GOLD | UIS_CENTER));
+	const Point uiPosition = GetUIRectangle().position;
 
-	SDL_Rect rect = { 17, (Sint16)(gnScreenHeight - 36), 605, 21 };
-	vecMainMenuDialog.push_back(new UiArtText(name, rect, UIS_SMALL));
+	if (gbIsSpawn && gbIsHellfire) {
+		const SDL_Rect rect1 = { (Sint16)(uiPosition.x), (Sint16)(uiPosition.y + 145), 640, 30 };
+		vecMainMenuDialog.push_back(std::make_unique<UiArtText>(_("Shareware").data(), rect1, UiFlags::FontSize30 | UiFlags::ColorUiSilver | UiFlags::AlignCenter, 8));
+	}
 
-	UiInitList(vecMenuItems.size(), nullptr, UiMainMenuSelect, MainmenuEsc, vecMainMenuDialog, true);
+	vecMainMenuDialog.push_back(std::make_unique<UiList>(vecMenuItems, vecMenuItems.size(), uiPosition.x + 64, (uiPosition.y + 192), 510, 43, UiFlags::FontSize42 | UiFlags::ColorUiGold | UiFlags::AlignCenter, 5));
+
+	const SDL_Rect rect2 = { 17, (Sint16)(gnScreenHeight - 36), 605, 21 };
+	vecMainMenuDialog.push_back(std::make_unique<UiArtText>(name, rect2, UiFlags::FontSize12 | UiFlags::ColorUiSilverDark));
+
+#ifndef NOEXIT
+	UiInitList(nullptr, UiMainMenuSelect, MainmenuEsc, vecMainMenuDialog, true);
+#else
+	UiInitList(nullptr, UiMainMenuSelect, nullptr, vecMainMenuDialog, true);
+#endif
 }
 
 void MainmenuFree()
 {
-	ArtBackgroundWidescreen.Unload();
-	ArtBackground.Unload();
+	ArtBackgroundWidescreen = std::nullopt;
+	ArtBackground = std::nullopt;
 
-	for (auto pUIItem : vecMainMenuDialog) {
-		delete pUIItem;
-	}
 	vecMainMenuDialog.clear();
 
-	for (auto pUIMenuItem : vecMenuItems) {
-		delete pUIMenuItem;
-	}
 	vecMenuItems.clear();
 }
 
@@ -86,29 +105,24 @@ void mainmenu_restart_repintro()
 	dwAttractTicks = SDL_GetTicks() + mainmenu_attract_time_out * 1000;
 }
 
-bool UiMainMenuDialog(const char *name, _mainmenu_selections *pdwResult, void (*fnSound)(const char *file), int attractTimeOut)
+bool UiMainMenuDialog(const char *name, _mainmenu_selections *pdwResult, int attractTimeOut)
 {
 	MainMenuResult = MAINMENU_NONE;
 	while (MainMenuResult == MAINMENU_NONE) {
 		mainmenu_attract_time_out = attractTimeOut;
-		MainmenuLoad(name, fnSound);
+		MainmenuLoad(name);
 
 		mainmenu_restart_repintro(); // for automatic starts
 
 		while (MainMenuResult == MAINMENU_NONE) {
 			UiClearScreen();
 			UiPollAndRender();
-			if (!gbSpawned && SDL_GetTicks() >= dwAttractTicks) {
+			if (SDL_GetTicks() >= dwAttractTicks && (HaveIntro() || gbIsHellfire)) {
 				MainMenuResult = MAINMENU_ATTRACT_MODE;
 			}
 		}
 
 		MainmenuFree();
-
-		if (gbSpawned && !gbIsHellfire && MainMenuResult == MAINMENU_REPLAY_INTRO) {
-			UiSelOkDialog(nullptr, "The Diablo introduction cinematic is only available in the full retail version of Diablo. Visit https://www.gog.com/game/diablo to purchase.", true);
-			MainMenuResult = MAINMENU_NONE;
-		}
 	}
 
 	*pdwResult = MainMenuResult;

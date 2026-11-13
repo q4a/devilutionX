@@ -5,8 +5,19 @@
  */
 #pragma once
 
-#include "player.h"
+#include <cstdint>
+#include <expected>
+#include <string>
+
 #include "DiabloUI/diabloui.h"
+#include "player.h"
+
+#ifdef UNPACKED_SAVES
+#include "utils/file_util.h"
+#else
+#include "mpq/mpq_reader.hpp"
+#include "mpq/mpq_writer.hpp"
+#endif
 
 namespace devilution {
 
@@ -14,34 +25,108 @@ namespace devilution {
 
 extern bool gbValidSaveFile;
 
-class PFileScopedArchiveWriter {
-public:
-	// Opens the player save file for writing
-	PFileScopedArchiveWriter(bool clear_tables = !gbIsMultiplayer);
+#ifdef UNPACKED_SAVES
+struct SaveReader {
+	explicit SaveReader(std::string &&dir)
+	    : dir_(std::move(dir))
+	{
+	}
 
-	// Finishes writing and closes the player save file.
-	~PFileScopedArchiveWriter();
+	const std::string &dir() const
+	{
+		return dir_;
+	}
+
+	std::unique_ptr<std::byte[]> ReadFile(const char *filename, std::size_t &fileSize, int32_t &error);
+
+	bool HasFile(const char *path)
+	{
+		return ::devilution::FileExists((dir_ + path).c_str());
+	}
 
 private:
-	DWORD save_num_;
-	bool clear_tables_;
+	std::string dir_;
 };
 
+struct SaveWriter {
+	explicit SaveWriter(std::string &&dir)
+	    : dir_(std::move(dir))
+	{
+	}
+
+	bool WriteFile(const char *filename, const std::byte *data, size_t size);
+
+	bool HasFile(const char *path)
+	{
+		return ::devilution::FileExists((dir_ + path).c_str());
+	}
+
+	void RenameFile(const char *from, const char *to)
+	{
+		::devilution::RenameFile((dir_ + from).c_str(), (dir_ + to).c_str());
+	}
+
+	void RemoveHashEntry(const char *path)
+	{
+		RemoveFile((dir_ + path).c_str());
+	}
+
+	void RemoveHashEntries(bool (*fnGetName)(uint8_t, char *));
+
+private:
+	std::string dir_;
+};
+
+#else
+using SaveReader = MpqArchive;
+using SaveWriter = MpqWriter;
+#endif
+
+/**
+ * @brief Comparison result of pfile_compare_hero_demo
+ */
+struct HeroCompareResult {
+	enum Status : uint8_t {
+		ReferenceNotFound,
+		Same,
+		Difference,
+	};
+	Status status;
+	std::string message;
+};
+
+std::optional<SaveReader> OpenSaveArchive(uint32_t saveNum);
+std::optional<SaveReader> OpenStashArchive();
 const char *pfile_get_password();
-void pfile_write_hero(bool write_game_data = false, bool clear_tables = !gbIsMultiplayer);
-bool pfile_ui_set_hero_infos(bool (*ui_add_hero_info)(_uiheroinfo *));
-bool pfile_archive_contains_game(HANDLE hsArchive);
-void pfile_ui_set_class_stats(unsigned int player_class_nr, _uidefaultstats *class_stats);
+std::unique_ptr<std::byte[]> ReadArchive(SaveReader &archive, const char *pszName, size_t *pdwLen = nullptr);
+void pfile_write_hero(bool writeGameData = false);
+
+#ifndef DISABLE_DEMOMODE
+/**
+ * @brief Save a reference game-state (save game) for the demo recording
+ * @param demo that is recorded
+ */
+void pfile_write_hero_demo(int demo);
+/**
+ * @brief Compares the actual game-state (savegame) with a reference game-state (save game from demo recording)
+ * @param demo for the comparison
+ * @param logDetails in case of a difference log details
+ * @return The comparison result.
+ */
+HeroCompareResult pfile_compare_hero_demo(int demo, bool logDetails);
+#endif
+
+void sfile_write_stash();
+bool pfile_ui_set_hero_infos(bool (*uiAddHeroInfo)(_uiheroinfo *));
+void pfile_ui_set_class_stats(HeroClass playerClass, _uidefaultstats *classStats);
+uint32_t pfile_ui_get_first_unused_save_num();
 bool pfile_ui_save_create(_uiheroinfo *heroinfo);
-bool pfile_get_file_name(uint8_t lvl, char *dst);
-bool pfile_delete_save(_uiheroinfo *hero_info);
-void pfile_read_player_from_save();
-bool LevelFileExists();
-void GetTempLevelNames(char *szTemp);
-void GetPermLevelNames(char *szPerm);
+bool pfile_delete_save(_uiheroinfo *heroInfo);
+void pfile_read_player_from_save(uint32_t saveNum, Player &player);
+void pfile_save_level();
+std::expected<void, std::string> pfile_convert_levels();
 void pfile_remove_temp_files();
-void pfile_write_save_file(const char *pszName, BYTE *pbData, DWORD dwLen, DWORD qwLen);
-BYTE *pfile_read(const char *pszName, DWORD *pdwLen);
-void pfile_update(bool force_save);
+std::unique_ptr<std::byte[]> pfile_read(const char *pszName, size_t *pdwLen);
+void pfile_update(bool forceSave);
 
 } // namespace devilution

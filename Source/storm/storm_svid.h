@@ -1,11 +1,11 @@
 #pragma once
 
-#include "miniwin/miniwin.h"
-
 namespace devilution {
 
-void SVidPlayBegin(const char *filename, int flags, HANDLE *video);
+bool SVidPlayBegin(const char *filename, int flags);
 bool SVidPlayContinue();
-void SVidPlayEnd(HANDLE video);
+void SVidPlayEnd();
+void SVidMute();
+void SVidUnmute();
 
 } // namespace devilution

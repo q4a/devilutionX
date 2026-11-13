@@ -1,168 +1,61 @@
 #pragma once
 
+#include <cstdint>
 #include <exception>
-#include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
+#include <ankerl/unordered_dense.h>
+#include <function_ref.hpp>
+
 #include "dvlnet/abstract_net.h"
+#include "storm/storm_net.hpp"
 
-namespace devilution {
-namespace net {
+namespace devilution::net {
 
-template <class T>
 class cdwrap : public abstract_net {
 private:
 	std::unique_ptr<abstract_net> dvlnet_wrap;
-	std::map<event_type, SEVTHANDLER> registered_handlers;
+	ankerl::unordered_dense::map<event_type, SEVTHANDLER> registered_handlers;
 	buffer_t game_init_info;
+	std::optional<std::string> game_pw;
+	tl::function_ref<std::unique_ptr<abstract_net>()> make_net_fn_;
 
 	void reset();
 
 public:
-	virtual int create(std::string addrstr, std::string passwd);
-	virtual int join(std::string addrstr, std::string passwd);
-	virtual bool SNetReceiveMessage(int *sender, char **data, int *size);
-	virtual bool SNetSendMessage(int dest, void *data,
-	    unsigned int size);
-	virtual bool SNetReceiveTurns(char **data, unsigned int *size,
-	    DWORD *status);
-	virtual bool SNetSendTurn(char *data, unsigned int size);
-	virtual int SNetGetProviderCaps(struct _SNETCAPS *caps);
-	virtual bool SNetRegisterEventHandler(event_type evtype,
-	    SEVTHANDLER func);
-	virtual bool SNetUnregisterEventHandler(event_type evtype,
-	    SEVTHANDLER func);
-	virtual bool SNetLeaveGame(int type);
-	virtual bool SNetDropPlayer(int playerid, DWORD flags);
-	virtual bool SNetGetOwnerTurnsWaiting(DWORD *turns);
-	virtual bool SNetGetTurnsInTransit(DWORD *turns);
-	virtual void setup_gameinfo(buffer_t info);
-	virtual std::string make_default_gamename();
+	explicit cdwrap(tl::function_ref<std::unique_ptr<abstract_net>()> makeNetFn)
+	    : make_net_fn_(makeNetFn)
+	{
+		reset();
+	}
 
-	cdwrap();
+	int create(std::string_view addrstr) override;
+	int join(std::string_view addrstr) override;
+	bool SNetReceiveMessage(uint8_t *sender, void **data, size_t *size) override;
+	bool SNetSendMessage(uint8_t dest, void *data, size_t size) override;
+	bool SNetReceiveTurns(char **data, size_t *size, uint32_t *status) override;
+	bool SNetSendTurn(char *data, size_t size) override;
+	void SNetGetProviderCaps(struct _SNETCAPS *caps) override;
+	bool SNetRegisterEventHandler(event_type evtype, SEVTHANDLER func) override;
+	bool SNetUnregisterEventHandler(event_type evtype) override;
+	bool SNetLeaveGame(net::leaveinfo_t type) override;
+	bool SNetDropPlayer(int playerid, net::leaveinfo_t flags) override;
+	bool SNetGetOwnerTurnsWaiting(uint32_t *turns) override;
+	bool SNetGetTurnsInTransit(uint32_t *turns) override;
+	void process_network_packets() override;
+	void setup_gameinfo(buffer_t info) override;
+	std::string make_default_gamename() override;
+	bool send_info_request() override;
+	void clear_gamelist() override;
+	std::vector<GameInfo> get_gamelist() override;
+	void setup_password(std::string pw) override;
+	void clear_password() override;
+	DvlNetLatencies get_latencies(uint8_t playerid) override;
+
 	virtual ~cdwrap() = default;
 };
 
-template <class T>
-cdwrap<T>::cdwrap()
-{
-	reset();
-}
-
-template <class T>
-void cdwrap<T>::reset()
-{
-	dvlnet_wrap.reset(new T);
-	dvlnet_wrap->setup_gameinfo(game_init_info);
-
-	for (const auto &pair : registered_handlers)
-		dvlnet_wrap->SNetRegisterEventHandler(pair.first, pair.second);
-}
-
-template <class T>
-int cdwrap<T>::create(std::string addrstr, std::string passwd)
-{
-	reset();
-	return dvlnet_wrap->create(addrstr, passwd);
-}
-
-template <class T>
-int cdwrap<T>::join(std::string addrstr, std::string passwd)
-{
-	game_init_info = buffer_t();
-	reset();
-	return dvlnet_wrap->join(addrstr, passwd);
-}
-
-template <class T>
-void cdwrap<T>::setup_gameinfo(buffer_t info)
-{
-	game_init_info = std::move(info);
-	if (dvlnet_wrap)
-		dvlnet_wrap->setup_gameinfo(game_init_info);
-}
-
-template <class T>
-bool cdwrap<T>::SNetReceiveMessage(int *sender, char **data, int *size)
-{
-	return dvlnet_wrap->SNetReceiveMessage(sender, data, size);
-}
-
-template <class T>
-bool cdwrap<T>::SNetSendMessage(int playerID, void *data, unsigned int size)
-{
-	return dvlnet_wrap->SNetSendMessage(playerID, data, size);
-}
-
-template <class T>
-bool cdwrap<T>::SNetReceiveTurns(char **data, unsigned int *size, DWORD *status)
-{
-	return dvlnet_wrap->SNetReceiveTurns(data, size, status);
-}
-
-template <class T>
-bool cdwrap<T>::SNetSendTurn(char *data, unsigned int size)
-{
-	return dvlnet_wrap->SNetSendTurn(data, size);
-}
-
-template <class T>
-int cdwrap<T>::SNetGetProviderCaps(struct _SNETCAPS *caps)
-{
-	return dvlnet_wrap->SNetGetProviderCaps(caps);
-}
-
-template <class T>
-bool cdwrap<T>::SNetUnregisterEventHandler(event_type evtype, SEVTHANDLER func)
-{
-	registered_handlers.erase(evtype);
-	if (dvlnet_wrap)
-		return dvlnet_wrap->SNetUnregisterEventHandler(evtype, func);
-	else
-		return true;
-}
-
-template <class T>
-bool cdwrap<T>::SNetRegisterEventHandler(event_type evtype, SEVTHANDLER func)
-{
-	registered_handlers[evtype] = func;
-	if (dvlnet_wrap)
-		return dvlnet_wrap->SNetRegisterEventHandler(evtype, func);
-	else
-		return true;
-}
-
-template <class T>
-bool cdwrap<T>::SNetLeaveGame(int type)
-{
-	return dvlnet_wrap->SNetLeaveGame(type);
-}
-
-template <class T>
-bool cdwrap<T>::SNetDropPlayer(int playerid, DWORD flags)
-{
-	return dvlnet_wrap->SNetDropPlayer(playerid, flags);
-}
-
-template <class T>
-bool cdwrap<T>::SNetGetOwnerTurnsWaiting(DWORD *turns)
-{
-	return dvlnet_wrap->SNetGetOwnerTurnsWaiting(turns);
-}
-
-template <class T>
-bool cdwrap<T>::SNetGetTurnsInTransit(DWORD *turns)
-{
-	return dvlnet_wrap->SNetGetTurnsInTransit(turns);
-}
-
-template <class T>
-std::string cdwrap<T>::make_default_gamename()
-{
-	return dvlnet_wrap->make_default_gamename();
-}
-
-} // namespace net
-} // namespace devilution
+} // namespace devilution::net

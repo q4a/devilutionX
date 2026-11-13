@@ -1,27 +1,22 @@
 #pragma once
 
+#include <cstdint>
 #include <deque>
 #include <exception>
+#include <expected>
 #include <vector>
-#include <cstdint>
+
+#include "dvlnet/packet.h"
 
 namespace devilution {
 namespace net {
 
 typedef std::vector<unsigned char> buffer_t;
-
-class frame_queue_exception : public std::exception {
-public:
-	const char *what() const throw() override
-	{
-		return "Incorrect frame size";
-	}
-};
-
 typedef uint32_t framesize_t;
 
 class frame_queue {
 public:
+	constexpr static framesize_t frame_size_mask = 0xFFFF;
 	constexpr static framesize_t max_frame_size = 0xFFFF;
 
 private:
@@ -29,15 +24,16 @@ private:
 	std::deque<buffer_t> buffer_deque;
 	framesize_t nextsize = 0;
 
-	framesize_t size();
-	buffer_t read(framesize_t s);
+	framesize_t Size() const;
+	std::expected<buffer_t, PacketError> Read(framesize_t s);
 
 public:
-	bool packet_ready();
-	buffer_t read_packet();
-	void write(buffer_t buf);
+	std::expected<bool, PacketError> PacketReady();
+	uint16_t ReadPacketFlags();
+	std::expected<buffer_t, PacketError> ReadPacket();
+	void Write(buffer_t buf);
 
-	static buffer_t make_frame(buffer_t packetbuf);
+	static std::expected<buffer_t, PacketError> MakeFrame(buffer_t packetbuf, uint16_t flags = 0);
 };
 
 } // namespace net

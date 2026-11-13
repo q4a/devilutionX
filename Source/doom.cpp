@@ -5,96 +5,40 @@
  */
 #include "doom.h"
 
-#include "control.h"
+#include <optional>
+
+#include "control/control.hpp"
+#include "engine/clx_sprite.hpp"
+#include "engine/load_cel.hpp"
+#include "engine/render/clx_render.hpp"
+#include "engine/render/primitive_render.hpp"
 
 namespace devilution {
+namespace {
+OptionalOwnedClxSpriteList DoomSprite;
+} // namespace
 
-int doom_quest_time;
-int doom_stars_drawn;
-BYTE *pDoomCel;
-bool doomflag;
-int DoomQuestState;
-
-/*
-void doom_reset_state()
-{
-    if (DoomQuestState <= 0) {
-        DoomQuestState = 0;
-    }
-}
-
-void doom_play_movie()
-{
-    if (DoomQuestState < 36001) {
-        DoomQuestState++;
-        if (DoomQuestState == 36001) {
-            PlayInGameMovie("gendata\\doom.smk");
-            DoomQuestState++;
-        }
-    }
-}
-*/
-
-int doom_get_frame_from_time()
-{
-	if (DoomQuestState == 36001) {
-		return 31;
-	}
-
-	return DoomQuestState / 1200;
-}
-
-void doom_cleanup()
-{
-	if (pDoomCel != nullptr) {
-		MemFreeDbg(pDoomCel);
-		pDoomCel = nullptr;
-	}
-}
-
-static bool doom_alloc_cel()
-{
-	doom_cleanup();
-	pDoomCel = DiabloAllocPtr(0x39000);
-	return pDoomCel != nullptr;
-}
-
-static bool doom_load_graphics()
-{
-	bool ret;
-
-	ret = false;
-	strcpy(tempstr, "Items\\Map\\MapZtown.CEL");
-	if (LoadFileWithMem(tempstr, pDoomCel) != 0)
-		ret = true;
-	return ret;
-}
+bool DoomFlag;
 
 void doom_init()
 {
-	if (doom_alloc_cel()) {
-		doom_quest_time = doom_get_frame_from_time() == 31 ? 31 : 0;
-		if (doom_load_graphics()) {
-			doomflag = true;
-		} else {
-			doom_close();
-		}
-	}
+	DoomSprite = LoadCel("items\\map\\mapztown", 640);
+	DoomFlag = true;
 }
 
 void doom_close()
 {
-	doomflag = false;
-	doom_cleanup();
+	DoomFlag = false;
+	DoomSprite = std::nullopt;
 }
 
-void doom_draw(const CelOutputBuffer &out)
+void doom_draw(const Surface &out)
 {
-	if (!doomflag) {
+	if (!DoomFlag) {
 		return;
 	}
 
-	CelDrawTo(out, PANEL_X, PANEL_Y - 1, pDoomCel, 1, 640);
+	ClxDraw(out, GetUIRectangle().position + Displacement { 0, 352 }, (*DoomSprite)[0]);
 }
 
 } // namespace devilution

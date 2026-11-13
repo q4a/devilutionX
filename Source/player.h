@@ -5,27 +5,44 @@
  */
 #pragma once
 
-#include <SDL.h>
-#include <stdint.h>
+#include <cstdint>
+#include <vector>
+
+#include <algorithm>
+#include <array>
+#include <string_view>
 
 #include "diablo.h"
-#include "gendung.h"
-#include "items.h"
-#include "multi.h"
-#include "spelldat.h"
-#include "path.h"
+#include "engine/actor_position.hpp"
+#include "engine/animationinfo.h"
+#include "engine/clx_sprite.hpp"
+#include "engine/displacement.hpp"
+#include "engine/path.h"
+#include "engine/point.hpp"
+#include "engine/render/scrollrt.h"
+#include "game_mode.hpp"
 #include "interfac.h"
+#include "items.h"
+#include "items/validation.h"
+#include "levels/dun_tile.hpp"
+#include "levels/gendung.h"
+#include "multi.h"
+#include "tables/playerdat.hpp"
+#include "tables/spelldat.h"
+#include "utils/attributes.h"
 #include "utils/enum_traits.h"
+#include "utils/fixed_point.hpp"
+#include "utils/is_of.hpp"
 
 namespace devilution {
 
-// number of inventory grid cells
-#define NUM_INV_GRID_ELEM 40
-#define MAXBELTITEMS 8
-#define MAXRESIST 75
-#define MAXCHARLEVEL 51
-#define MAX_SPELL_LEVEL 15
-#define PLR_NAME_LEN 32
+constexpr int InventoryGridCells = 40;
+constexpr int MaxBeltItems = 8;
+constexpr int MaxResistance = 75;
+constexpr uint8_t MaxSpellLevel = 15;
+constexpr int PlayerNameLength = 32;
+
+constexpr size_t NumHotkeys = 12;
 
 /** Walking directions */
 enum {
@@ -40,17 +57,6 @@ enum {
 	WALK_W    =  8,
 	WALK_NONE = -1,
 	// clang-format on
-};
-
-enum class HeroClass : uint8_t {
-	Warrior,
-	Rogue,
-	Sorcerer,
-	Monk,
-	Bard,
-	Barbarian,
-
-	LAST = Barbarian
 };
 
 enum class CharacterAttribute : uint8_t {
@@ -75,40 +81,37 @@ enum inv_body_loc : uint8_t {
 	NUM_INVLOC,
 };
 
-enum player_graphic : uint16_t {
-	// clang-format off
-	PFILE_STAND     = 1 << 0,
-	PFILE_WALK      = 1 << 1,
-	PFILE_ATTACK    = 1 << 2,
-	PFILE_HIT       = 1 << 3,
-	PFILE_LIGHTNING = 1 << 4,
-	PFILE_FIRE      = 1 << 5,
-	PFILE_MAGIC     = 1 << 6,
-	PFILE_DEATH     = 1 << 7,
-	PFILE_BLOCK     = 1 << 8,
-	// everything except PFILE_DEATH
-	// 0b1_0111_1111
-	PFILE_NONDEATH = 0x17F
-	// clang-format on
+enum class player_graphic : uint8_t {
+	Stand,
+	Walk,
+	Attack,
+	Hit,
+	Lightning,
+	Fire,
+	Magic,
+	Death,
+	Block,
+
+	LAST = Block
 };
 
-enum anim_weapon_id : uint8_t {
-	ANIM_ID_UNARMED,
-	ANIM_ID_UNARMED_SHIELD,
-	ANIM_ID_SWORD,
-	ANIM_ID_SWORD_SHIELD,
-	ANIM_ID_BOW,
-	ANIM_ID_AXE,
-	ANIM_ID_MACE,
-	ANIM_ID_MACE_SHIELD,
-	ANIM_ID_STAFF,
+enum class PlayerWeaponGraphic : uint8_t {
+	Unarmed,
+	UnarmedShield,
+	Sword,
+	SwordShield,
+	Bow,
+	Axe,
+	Mace,
+	MaceShield,
+	Staff,
 };
 
 enum PLR_MODE : uint8_t {
 	PM_STAND,
-	PM_WALK,  //Movement towards N, NW, or NE
-	PM_WALK2, //Movement towards S, SW, or SE
-	PM_WALK3, //Movement towards W or E
+	PM_WALK_NORTHWARDS,
+	PM_WALK_SOUTHWARDS,
+	PM_WALK_SIDEWAYS,
 	PM_ATTACK,
 	PM_RATTACK,
 	PM_BLOCK,
@@ -142,70 +145,84 @@ enum action_id : int8_t {
 	// clang-format on
 };
 
-enum player_weapon_type : uint8_t {
-	WT_MELEE,
-	WT_RANGED,
+enum class SpellFlag : uint8_t {
+	// clang-format off
+	None         = 0,
+	Etherealize  = 1 << 0,
+	RageActive   = 1 << 1,
+	RageCooldown = 1 << 2,
+	// bits 3-7 are unused
+	// clang-format on
+};
+use_enum_as_flags(SpellFlag);
+
+/* @brief When the player dies, what is the reason/source why? */
+enum class DeathReason {
+	/* @brief Monster or Trap (dungeon) */
+	MonsterOrTrap,
+	/* @brief Other player or selfkill (for example firewall) */
+	Player,
+	/* @brief HP is zero but we don't know when or where this happened */
+	Unknown,
 };
 
-struct PlayerStruct {
-	PLR_MODE _pmode;
-	int8_t walkpath[MAX_PATH_LENGTH];
-	bool plractive;
-	action_id destAction;
-	int destParam1;
-	int destParam2;
-	direction destParam3;
-	int destParam4;
-	int plrlevel;
-	int _px;    // Tile X-position of player
-	int _py;    // Tile Y-position of player
-	int _pfutx; // Future tile X-position of player. Set at start of walking animation
-	int _pfuty;
-	int _pownerx;    // Tile X-position of player. Set via network on player input
-	int _pownery;    // Tile X-position of player. Set via network on player input
-	int _poldx;      // Most recent X-position in dPlayer.
-	int _poldy;      // Most recent Y-position in dPlayer.
-	int _pxoff;      // Player sprite's pixel X-offset from tile.
-	int _pyoff;      // Player sprite's pixel Y-offset from tile.
-	int _pxvel;      // Pixel X-velocity while walking. Indirectly applied to _pxoff via _pvar6
-	int _pyvel;      // Pixel Y-velocity while walking. Indirectly applied to _pyoff via _pvar7
-	direction _pdir; // Direction faced by player (direction enum)
-	int _pgfxnum;    // Bitmask indicating what variant of the sprite the player is using. Lower byte define weapon (anim_weapon_id) and higher values define armour (starting with anim_armor_id)
-	uint8_t *_pAnimData;
-	int _pAnimDelay; // Tick length of each frame in the current animation
-	int _pAnimCnt;   // Increases by one each game tick, counting how close we are to _pAnimDelay
-	int _pAnimLen;   // Number of frames in current animation
-	int _pAnimFrame; // Current frame of animation.
-	int _pAnimWidth;
-	int _pAnimWidth2;
-	int _pAnimNumSkippedFrames;              // Number of Frames that will be skipped (for example with modifier "faster attack")
-	int _pAnimGameTicksSinceSequenceStarted; // Number of GameTicks after the current animation sequence started
-	int _pAnimStopDistributingAfterFrame;    // Distribute the NumSkippedFrames only before this frame
-	int _plid;
-	int _pvid;
-	spell_id _pSpell;
-	spell_type _pSplType;
-	int8_t _pSplFrom; // TODO Create enum
-	spell_id _pTSpell;
-	spell_type _pTSplType;
-	spell_id _pRSpell;
-	spell_type _pRSplType;
-	spell_id _pSBkSpell;
-	spell_type _pSBkSplType;
-	int8_t _pSplLvl[64];
-	uint64_t _pMemSpells;  // Bitmask of learned spells
-	uint64_t _pAblSpells;  // Bitmask of abilities
-	uint64_t _pScrlSpells; // Bitmask of spells available via scrolls
-	uint8_t _pSpellFlags;
-	spell_id _pSplHotKey[4];
-	spell_type _pSplTHotKey[4];
-	player_weapon_type _pwtype;
-	bool _pBlockFlag;
-	bool _pInvincible;
-	int8_t _pLightRad;
-	bool _pLvlChanging; // True when the player is transitioning between levels
-	char _pName[PLR_NAME_LEN];
-	HeroClass _pClass;
+/** Maps from armor animation to letter used in graphic files. */
+constexpr std::array<char, 3> ArmourChar = {
+	'l', // light
+	'm', // medium
+	'h', // heavy
+};
+/** Maps from weapon animation to letter used in graphic files. */
+constexpr std::array<char, 9> WepChar = {
+	'n', // unarmed
+	'u', // no weapon + shield
+	's', // sword + no shield
+	'd', // sword + shield
+	'b', // bow
+	'a', // axe
+	'm', // blunt + no shield
+	'h', // blunt + shield
+	't', // staff
+};
+
+/**
+ * @brief Contains Data (CelSprites) for a player graphic (player_graphic)
+ */
+struct PlayerAnimationData {
+	/**
+	 * @brief Sprite lists for each of the 8 directions.
+	 */
+	OptionalOwnedClxSpriteSheet sprites;
+
+	[[nodiscard]] ClxSpriteList spritesForDirection(Direction direction) const
+	{
+		return (*sprites)[static_cast<size_t>(direction)];
+	}
+};
+
+struct SpellCastInfo {
+	SpellID spellId;
+	SpellType spellType;
+	/* @brief Inventory location for scrolls */
+	int8_t spellFrom;
+	/* @brief Used for spell level */
+	int spellLevel;
+};
+
+struct Player {
+	Player() = default;
+	Player(Player &&) noexcept = default;
+	Player &operator=(Player &&) noexcept = default;
+
+	char _pName[PlayerNameLength];
+	Item InvBody[NUM_INVLOC];
+	Item InvList[InventoryGridCells];
+	Item SpdList[MaxBeltItems];
+	Item HoldItem;
+
+	int lightId;
+
+	int _pNumInv;
 	int _pStrength;
 	int _pBaseStr;
 	int _pMagic;
@@ -216,71 +233,16 @@ struct PlayerStruct {
 	int _pBaseVit;
 	int _pStatPts;
 	int _pDamageMod;
-	int _pBaseToBlk;
-	int _pHPBase;
-	int _pMaxHPBase;
-	int _pHitPoints;
-	int _pMaxHP;
+	Fixed26_6 _pHPBase;
+	Fixed26_6 _pMaxHPBase;
+	Fixed26_6 _pHitPoints;
+	Fixed26_6 _pMaxHP;
 	int _pHPPer;
-	int _pManaBase;
-	int _pMaxManaBase;
-	int _pMana;
-	int _pMaxMana;
+	Fixed26_6 _pManaBase;
+	Fixed26_6 _pMaxManaBase;
+	Fixed26_6 _pMana;
+	Fixed26_6 _pMaxMana;
 	int _pManaPer;
-	int8_t _pLevel;
-	int8_t _pMaxLvl;
-	int _pExperience;
-	int _pMaxExp;
-	int _pNextExper;
-	int8_t _pArmorClass;
-	int8_t _pMagResist;
-	int8_t _pFireResist;
-	int8_t _pLghtResist;
-	int _pGold;
-	bool _pInfraFlag;
-	int _pVar1;       // Used for referring to X-position of player when finishing moving one tile (also used to define target coordinates for spells and ranged attacks)
-	int _pVar2;       // Used for referring to Y-position of player when finishing moving one tile (also used to define target coordinates for spells and ranged attacks)
-	direction _pVar3; // Player's direction when ending movement. Also used for casting direction of SPL_FIREWALL.
-	int _pVar4;       // Used for storing X-position of a tile which should have its BFLAG_PLAYERLR flag removed after walking. When starting to walk the game places the player in the dPlayer array -1 in the Y coordinate, and uses BFLAG_PLAYERLR to check if it should be using -1 to the Y coordinate when rendering the player (also used for storing the level of a spell when the player casts it)
-	int _pVar5;       // Used for storing Y-position of a tile which should have its BFLAG_PLAYERLR flag removed after walking. When starting to walk the game places the player in the dPlayer array -1 in the Y coordinate, and uses BFLAG_PLAYERLR to check if it should be using -1 to the Y coordinate when rendering the player (also used for storing the level of a spell when the player casts it)
-	int _pVar6;       // Same as _pxoff but contains the value in a higher range
-	int _pVar7;       // Same as _pyoff but contains the value in a higher range
-	int _pVar8;       // Used for counting how close we are to reaching the next tile when walking (usually counts to 8, which is equal to the walk animation length). Also used for stalling the appearance of the options screen after dying in singleplayer
-	bool _pLvlVisited[NUMLEVELS];
-	bool _pSLvlVisited[NUMLEVELS]; // only 10 used
-	                               /** Using player_graphic as bitflags */
-	int _pGFXLoad;
-	uint8_t *_pNAnim[8]; // Stand animations
-	int _pNFrames;
-	int _pNWidth;
-	uint8_t *_pWAnim[8]; // Walk animations
-	int _pWFrames;
-	int _pWWidth;
-	uint8_t *_pAAnim[8]; // Attack animations
-	int _pAFrames;
-	int _pAWidth;
-	int _pAFNum;
-	uint8_t *_pLAnim[8]; // Lightning spell cast animations
-	uint8_t *_pFAnim[8]; // Fire spell cast animations
-	uint8_t *_pTAnim[8]; // Generic spell cast animations
-	int _pSFrames;
-	int _pSWidth;
-	int _pSFNum;
-	uint8_t *_pHAnim[8]; // Getting hit animations
-	int _pHFrames;
-	int _pHWidth;
-	uint8_t *_pDAnim[8]; // Death animations
-	int _pDFrames;
-	int _pDWidth;
-	uint8_t *_pBAnim[8]; // Block animations
-	int _pBFrames;
-	int _pBWidth;
-	ItemStruct InvBody[NUM_INVLOC];
-	ItemStruct InvList[NUM_INV_GRID_ELEM];
-	int _pNumInv;
-	int8_t InvGrid[NUM_INV_GRID_ELEM];
-	ItemStruct SpdList[MAXBELTITEMS];
-	ItemStruct HoldItem;
 	int _pIMinDam;
 	int _pIMaxDam;
 	int _pIAC;
@@ -288,39 +250,219 @@ struct PlayerStruct {
 	int _pIBonusToHit;
 	int _pIBonusAC;
 	int _pIBonusDamMod;
-	/** Bitmask of staff spell */
-	uint64_t _pISpells;
-	/** Bitmask using item_special_effect */
-	int _pIFlags;
 	int _pIGetHit;
-	int8_t _pISplLvlAdd;
-	int _pISplDur;
 	int _pIEnAc;
 	int _pIFMinDam;
 	int _pIFMaxDam;
 	int _pILMinDam;
 	int _pILMaxDam;
+	uint32_t _pExperience;
+	PLR_MODE _pmode;
+	int8_t walkpath[MaxPathLengthPlayer];
+	bool plractive;
+	action_id destAction;
+	int destParam1;
+	int destParam2;
+	int destParam3;
+	int destParam4;
+	int _pGold;
+
+	/**
+	 * @brief Contains Information for current Animation
+	 */
+	AnimationInfo AnimInfo;
+	/**
+	 * @brief Contains a optional preview ClxSprite that is displayed until the current command is handled by the game logic
+	 */
+	OptionalClxSprite previewCelSprite;
+	/**
+	 * @brief Contains the progress to next game tick when previewCelSprite was set
+	 */
+	int8_t progressToNextGameTickWhenPreviewWasSet;
+	/** @brief Bitmask using item_special_effect */
+	ItemSpecialEffect _pIFlags;
+	/**
+	 * @brief Contains Data (Sprites) for the different Animations
+	 */
+	std::array<PlayerAnimationData, enum_size<player_graphic>::value> AnimationData;
+	std::array<OptionalOwnedClxSpriteSheet, 2> PartyInfoSprites;
+	std::array<std::string, 2> PartyInfoSpriteLocations;
+	int8_t _pNFrames;
+	int8_t _pWFrames;
+	int8_t _pAFrames;
+	int8_t _pAFNum;
+	int8_t _pSFrames;
+	int8_t _pSFNum;
+	int8_t _pHFrames;
+	int8_t _pDFrames;
+	int8_t _pBFrames;
+	int8_t InvGrid[InventoryGridCells];
+
+	uint8_t plrlevel;
+	bool plrIsOnSetLevel;
+	ActorPosition position;
+	Direction _pdir; // Direction faced by player (direction enum)
+	HeroClass _pClass;
+
+private:
+	uint8_t _pLevel = 1; // Use get/setCharacterLevel to ensure this attribute stays within the accepted range
+
+public:
+	uint8_t _pgfxnum; // Bitmask indicating what variant of the sprite the player is using. The 3 lower bits define weapon (PlayerWeaponGraphic) and the higher bits define armour (starting with PlayerArmorGraphic)
+	int8_t _pISplLvlAdd;
+	/** @brief Specifies whether players are in non-PvP mode. */
+	bool friendlyMode = true;
+
+	/** @brief The next queued spell */
+	SpellCastInfo queuedSpell;
+	/** @brief The spell that is currently being cast */
+	SpellCastInfo executedSpell;
+	/* @brief Which spell should be executed with CURSOR_TELEPORT */
+	SpellID inventorySpell;
+	/* @brief Inventory location for scrolls with CURSOR_TELEPORT */
+	int8_t spellFrom;
+	SpellID _pRSpell;
+	SpellType _pRSplType;
+	SpellID _pSBkSpell;
+	uint8_t _pSplLvl[64];
+	/** @brief Bitmask of staff spell */
+	uint64_t _pISpells;
+	/** @brief Bitmask of learned spells */
+	uint64_t _pMemSpells;
+	/** @brief Bitmask of abilities */
+	uint64_t _pAblSpells;
+	/** @brief Bitmask of spells available via scrolls */
+	uint64_t _pScrlSpells;
+	SpellFlag _pSpellFlags;
+	SpellID _pSplHotKey[NumHotkeys];
+	SpellType _pSplTHotKey[NumHotkeys];
+	bool _pBlockFlag;
+	bool _pInvincible;
+	int8_t _pLightRad;
+	/** @brief True when the player is transitioning between levels */
+	bool _pLvlChanging;
+
+	int8_t _pArmorClass;
+	int8_t _pMagResist;
+	int8_t _pFireResist;
+	int8_t _pLghtResist;
+	bool _pInfraFlag;
+	/** Player's direction when ending movement. Also used for casting direction of SpellID::FireWall. */
+	Direction tempDirection;
+
+	bool _pLvlVisited[NUMLEVELS];
+	bool _pSLvlVisited[NUMLEVELS]; // only 10 used
+
 	item_misc_id _pOilType;
 	uint8_t pTownWarps;
 	uint8_t pDungMsgs;
 	uint8_t pLvlLoad;
-	bool pBattleNet;
 	bool pManaShield;
 	uint8_t pDungMsgs2;
 	bool pOriginalCathedral;
-	uint16_t wReflections;
 	uint8_t pDiabloKillLevel;
-	_difficulty pDifficulty;
-	uint32_t pDamAcFlags;
-	uint8_t *_pNData;
-	uint8_t *_pWData;
-	uint8_t *_pAData;
-	uint8_t *_pLData;
-	uint8_t *_pFData;
-	uint8_t *_pTData;
-	uint8_t *_pHData;
-	uint8_t *_pDData;
-	uint8_t *_pBData;
+	/** @brief Town id of the current town (matches TownConfig::townId; 0 = Tristram) */
+	uint8_t _pCurrentTownId;
+	uint16_t wReflections;
+	ItemSpecialEffectHf pDamAcFlags;
+
+	[[nodiscard]] std::string_view name() const
+	{
+		return _pName;
+	}
+
+	/**
+	 * @brief Convenience function to get the base stats/bonuses for this player's class
+	 */
+	[[nodiscard]] const ClassAttributes &getClassAttributes() const
+	{
+		return GetClassAttributes(_pClass);
+	}
+
+	[[nodiscard]] const PlayerCombatData &getPlayerCombatData() const
+	{
+		return GetPlayerCombatDataForClass(_pClass);
+	}
+
+	[[nodiscard]] const PlayerData &getPlayerData() const
+	{
+		return GetPlayerDataForClass(_pClass);
+	}
+
+	/**
+	 * @brief Gets the translated name for the character's class
+	 */
+	[[nodiscard]] std::string_view getClassName() const
+	{
+		return _(getPlayerData().className);
+	}
+
+	[[nodiscard]] int getBaseToBlock() const
+	{
+		return getPlayerCombatData().baseToBlock;
+	}
+
+	void CalcScrolls();
+
+	bool CanUseItem(const Item &item) const;
+
+	bool CanCleave()
+	{
+		switch (_pClass) {
+		case HeroClass::Warrior:
+		case HeroClass::Rogue:
+		case HeroClass::Sorcerer:
+			return false;
+		case HeroClass::Monk:
+			return isEquipped(ItemType::Staff);
+		case HeroClass::Bard:
+			return InvBody[INVLOC_HAND_LEFT]._itype == ItemType::Sword && InvBody[INVLOC_HAND_RIGHT]._itype == ItemType::Sword;
+		case HeroClass::Barbarian:
+			return isEquipped(ItemType::Axe) || (!isEquipped(ItemType::Shield) && (isEquipped(ItemType::Mace, true) || isEquipped(ItemType::Sword, true)));
+		default:
+			return false;
+		}
+	}
+
+	bool isEquipped(ItemType itemType, bool isTwoHanded = false)
+	{
+		switch (itemType) {
+		case ItemType::Sword:
+		case ItemType::Axe:
+		case ItemType::Bow:
+		case ItemType::Mace:
+		case ItemType::Shield:
+		case ItemType::Staff:
+			return (InvBody[INVLOC_HAND_LEFT]._itype == itemType && (!isTwoHanded || InvBody[INVLOC_HAND_LEFT]._iLoc == ILOC_TWOHAND))
+			    || (InvBody[INVLOC_HAND_RIGHT]._itype == itemType && (!isTwoHanded || InvBody[INVLOC_HAND_LEFT]._iLoc == ILOC_TWOHAND));
+		case ItemType::LightArmor:
+		case ItemType::MediumArmor:
+		case ItemType::HeavyArmor:
+			return InvBody[INVLOC_CHEST]._itype == itemType;
+		case ItemType::Helm:
+			return InvBody[INVLOC_HEAD]._itype == itemType;
+		case ItemType::Ring:
+			return InvBody[INVLOC_RING_LEFT]._itype == itemType || InvBody[INVLOC_RING_RIGHT]._itype == itemType;
+		case ItemType::Amulet:
+			return InvBody[INVLOC_AMULET]._itype == itemType;
+		default:
+			return false;
+		}
+	}
+
+	/**
+	 * @brief Remove an item from player inventory
+	 * @param iv invList index of item to be removed
+	 * @param calcScrolls If true, CalcScrolls() gets called after removing item
+	 */
+	void RemoveInvItem(int iv, bool calcScrolls = true);
+
+	/**
+	 * @brief Returns the network identifier for this player
+	 */
+	[[nodiscard]] uint8_t getId() const;
+
+	void RemoveSpdBarItem(int iv);
 
 	/**
 	 * @brief Gets the most valuable item out of all the player's items that match the given predicate.
@@ -329,9 +471,9 @@ struct PlayerStruct {
 	 * matching items were found.
 	 */
 	template <typename TPredicate>
-	const ItemStruct *GetMostValuableItem(const TPredicate &itemPredicate) const
+	const Item *GetMostValuableItem(const TPredicate &itemPredicate) const
 	{
-		const auto getMostValuableItem = [&itemPredicate](const ItemStruct *begin, const ItemStruct *end, const ItemStruct *mostValuableItem = nullptr) {
+		const auto getMostValuableItem = [&itemPredicate](const Item *begin, const Item *end, const Item *mostValuableItem = nullptr) {
 			for (const auto *item = begin; item < end; item++) {
 				if (item->isEmpty() || !itemPredicate(*item)) {
 					continue;
@@ -345,7 +487,7 @@ struct PlayerStruct {
 			return mostValuableItem;
 		};
 
-		const ItemStruct *mostValuableItem = getMostValuableItem(SpdList, SpdList + MAXBELTITEMS);
+		const Item *mostValuableItem = getMostValuableItem(SpdList, SpdList + MaxBeltItems);
 		mostValuableItem = getMostValuableItem(InvBody, InvBody + inv_body_loc::NUM_INVLOC, mostValuableItem);
 		mostValuableItem = getMostValuableItem(InvList, InvList + _pNumInv, mostValuableItem);
 
@@ -360,6 +502,13 @@ struct PlayerStruct {
 	int GetBaseAttributeValue(CharacterAttribute attribute) const;
 
 	/**
+	 * @brief Gets the current value of the player's specified attribute.
+	 * @param attribute The attribute to retrieve the current value for
+	 * @return The current value for the requested attribute.
+	 */
+	int GetCurrentAttributeValue(CharacterAttribute attribute) const;
+
+	/**
 	 * @brief Gets the maximum value of the player's specified attribute.
 	 * @param attribute The attribute to retrieve the maximum value for
 	 * @return The maximum value for the requested attribute.
@@ -369,115 +518,492 @@ struct PlayerStruct {
 	/**
 	 * @brief Get the tile coordinates a player is moving to (if not moving, then it corresponds to current position).
 	 */
-	SDL_Point GetTargetPosition() const;
+	Point GetTargetPosition() const;
 
 	/**
-	 * @brief Play a speach file.
-	 * @todo Create enum for speachId
-	 * @todo BUGFIX Prevent more then one speach to be played at a time (reject new requests).
+	 * @brief Returns the index of the given position in `walkpath`, or -1 if not found.
 	 */
-	void PlaySpeach(int speachId) const;
+	int GetPositionPathIndex(Point position);
+
 	/**
-	 * @brief Play a speach file after a given delay.
-	 * @param delay Multiple of 20ms waith before starting the speach
+	 * @brief Says a speech line.
+	 * @todo BUGFIX Prevent more than one speech to be played at a time (reject new requests).
 	 */
-	void PlaySpeach(int speachId, int delay) const;
+	void Say(HeroSpeech speechId) const;
 	/**
-	 * @brief Play a player speach file, with out random variants.
+	 * @brief Says a speech line after a given delay.
+	 * @param speechId The speech ID to say.
+	 * @param delay Multiple of 50ms wait before starting the speech
 	 */
-	void PlaySpecificSpeach(int speachId) const;
+	void Say(HeroSpeech speechId, int delay) const;
+	/**
+	 * @brief Says a speech line, without random variants.
+	 */
+	void SaySpecific(HeroSpeech speechId) const;
+
+	/**
+	 * @brief Attempts to stop the player from performing any queued up action. If the player is currently walking, his walking will
+	 * stop as soon as he reaches the next tile. If any action was queued with the previous command (like targeting a monster,
+	 * opening a chest, picking an item up, etc) this action will also be cancelled.
+	 */
+	void Stop();
+
+	/**
+	 * @brief Is the player currently walking?
+	 */
+	bool isWalking() const;
+
+	/**
+	 * @brief Returns item location taking into consideration barbarian's ability to hold two-handed maces and clubs in one hand.
+	 */
+	item_equip_type GetItemLocation(const Item &item) const
+	{
+		if (_pClass == HeroClass::Barbarian && item._iLoc == ILOC_TWOHAND && IsAnyOf(item._itype, ItemType::Sword, ItemType::Mace))
+			return ILOC_ONEHAND;
+		return item._iLoc;
+	}
+
+	/**
+	 * @brief Return player's armor value
+	 */
+	int GetArmor() const
+	{
+		return _pIBonusAC + _pIAC + _pDexterity / 5;
+	}
+
+	/**
+	 * @brief Return player's melee to hit value
+	 */
+	int GetMeleeToHit() const
+	{
+		return getCharacterLevel() + _pDexterity / 2 + _pIBonusToHit + getPlayerCombatData().baseMeleeToHit;
+	}
+
+	/**
+	 * @brief Return player's melee to hit value, including armor piercing
+	 */
+	int GetMeleePiercingToHit() const
+	{
+		int hper = GetMeleeToHit();
+		// in hellfire armor piercing ignores % of enemy armor instead, no way to include it here
+		if (!gbIsHellfire)
+			hper += _pIEnAc;
+		return hper;
+	}
+
+	/**
+	 * @brief Return player's ranged to hit value
+	 */
+	int GetRangedToHit() const
+	{
+		return getCharacterLevel() + _pDexterity + _pIBonusToHit + getPlayerCombatData().baseRangedToHit;
+	}
+
+	int GetRangedPiercingToHit() const
+	{
+		int hper = GetRangedToHit();
+		// in hellfire armor piercing ignores % of enemy armor instead, no way to include it here
+		if (!gbIsHellfire)
+			hper += _pIEnAc;
+		return hper;
+	}
+
+	/**
+	 * @brief Return magic hit chance
+	 */
+	int GetMagicToHit() const
+	{
+		return _pMagic + getPlayerCombatData().baseMagicToHit;
+	}
+
+	/**
+	 * @brief Return block chance
+	 * @param useLevel - indicate if player's level should be added to block chance (the only case where it isn't is blocking a trap)
+	 */
+	int GetBlockChance(bool useLevel = true) const
+	{
+		int blkper = _pDexterity + getBaseToBlock();
+		if (useLevel)
+			blkper += getCharacterLevel() * 2;
+		return blkper;
+	}
+
+	/**
+	 * @brief Return reciprocal of the factor for calculating damage reduction due to Mana Shield.
+	 *
+	 * Valid only for players with Mana Shield spell level greater than zero.
+	 */
+	int GetManaShieldDamageReduction();
+
+	/**
+	 * @brief Gets the effective spell level for the player, considering item bonuses
+	 * @param spell SpellID enum member identifying the spell
+	 * @return effective spell level
+	 */
+	int GetSpellLevel(SpellID spell) const
+	{
+		if (spell == SpellID::Invalid || static_cast<std::size_t>(spell) >= sizeof(_pSplLvl)) {
+			return 0;
+		}
+
+		return std::max<int>(_pISplLvlAdd + _pSplLvl[static_cast<std::size_t>(spell)], 0);
+	}
+
+	/**
+	 * @brief Return monster armor value after including player's armor piercing % (hellfire only)
+	 * @param monsterArmor - monster armor before applying % armor pierce
+	 * @param isMelee - indicates if it's melee or ranged combat
+	 */
+	int CalculateArmorPierce(int monsterArmor, bool isMelee) const
+	{
+		int tmac = monsterArmor;
+		if (_pIEnAc > 0) {
+			if (gbIsHellfire) {
+				int pIEnAc = _pIEnAc - 1;
+				if (pIEnAc > 0)
+					tmac >>= pIEnAc;
+				else
+					tmac -= tmac / 4;
+			}
+			if (isMelee && _pClass == HeroClass::Barbarian) {
+				tmac -= monsterArmor / 8;
+			}
+		}
+		if (tmac < 0)
+			tmac = 0;
+
+		return tmac;
+	}
+
+	/**
+	 * @brief Calculates the players current Hit Points as a percentage of their max HP and stores it for later reference
+	 *
+	 * The stored value is unused...
+	 * @see _pHPPer
+	 * @return The players current hit points as a percentage of their maximum (from 0 to 80%)
+	 */
+	int UpdateHitPointPercentage()
+	{
+		if (_pMaxHP <= 0) { // divide by zero guard
+			_pHPPer = 0;
+		} else {
+			// Maximum achievable HP is approximately 1200. Diablo uses fixed point integers where the last 6 bits are
+			// fractional values. This means that we will never overflow HP values normally by doing this multiplication
+			// as the max value is representable in 17 bits and the multiplication result will be at most 23 bits
+			_pHPPer = std::clamp<int>(_pHitPoints.raw() * 81 / _pMaxHP.raw(), 0, 81); // hp should never be greater than maxHP but just in case
+		}
+
+		return _pHPPer;
+	}
+
+	int UpdateManaPercentage()
+	{
+		if (_pMaxMana <= 0) {
+			_pManaPer = 0;
+		} else {
+			_pManaPer = std::clamp<int>(_pMana.raw() * 81 / _pMaxMana.raw(), 0, 81);
+		}
+
+		return _pManaPer;
+	}
+
+	/**
+	 * @brief Restores between 1/8 (inclusive) and 1/4 (exclusive) of the players max HP (further adjusted by class).
+	 *
+	 * This determines a random amount of non-fractional life points to restore then scales the value based on the
+	 *  player class. Warriors/barbarians get between 1/4 and 1/2 life restored per potion, rogue/monk/bard get 3/16
+	 *  to 3/8, and sorcerers get the base amount.
+	 */
+	void RestorePartialLife();
+
+	/**
+	 * @brief Resets hp to maxHp
+	 */
+	void RestoreFullLife()
+	{
+		_pHitPoints = _pMaxHP;
+		_pHPBase = _pMaxHPBase;
+	}
+
+	/**
+	 * @brief Restores between 1/8 (inclusive) and 1/4 (exclusive) of the players max Mana (further adjusted by class).
+	 *
+	 * This determines a random amount of non-fractional mana points to restore then scales the value based on the
+	 *  player class. Sorcerers get between 1/4 and 1/2 mana restored per potion, rogue/monk/bard get 3/16 to 3/8,
+	 *  and warrior/barbarian get the base amount. However if the player can't use magic due to an equipped item then
+	 *  they get nothing.
+	 */
+	void RestorePartialMana();
+
+	/**
+	 * @brief Resets mana to maxMana (if the player can use magic)
+	 */
+	void RestoreFullMana()
+	{
+		if (HasNoneOf(_pIFlags, ItemSpecialEffect::NoMana)) {
+			_pMana = _pMaxMana;
+			_pManaBase = _pMaxManaBase;
+		}
+	}
+	/**
+	 * @brief Sets the readied spell to the spell in the specified equipment slot. Does nothing if the item does not have a valid spell.
+	 * @param bodyLocation - the body location whose item will be checked for the spell.
+	 * @param forceSpell - if true, always change active spell, if false, only when current spell slot is empty
+	 */
+	void ReadySpellFromEquipment(inv_body_loc bodyLocation, bool forceSpell);
+
+	/**
+	 * @brief Does the player currently have a ranged weapon equipped?
+	 */
+	bool UsesRangedWeapon() const
+	{
+		return static_cast<PlayerWeaponGraphic>(_pgfxnum & 0xF) == PlayerWeaponGraphic::Bow;
+	}
+
+	bool CanChangeAction()
+	{
+		if (_pmode == PM_STAND)
+			return true;
+		if (_pmode == PM_ATTACK && AnimInfo.currentFrame >= _pAFNum)
+			return true;
+		if (_pmode == PM_RATTACK && AnimInfo.currentFrame >= _pAFNum)
+			return true;
+		if (_pmode == PM_SPELL && AnimInfo.currentFrame >= _pSFNum)
+			return true;
+		if (isWalking() && AnimInfo.isLastFrame())
+			return true;
+		return false;
+	}
+
+	[[nodiscard]] player_graphic getGraphic() const;
+
+	[[nodiscard]] uint16_t getSpriteWidth() const;
+
+	void getAnimationFramesAndTicksPerFrame(player_graphic graphics, int8_t &numberOfFrames, int8_t &ticksPerFrame) const;
+
+	[[nodiscard]] ClxSprite currentSprite() const
+	{
+		return previewCelSprite ? *previewCelSprite : AnimInfo.currentSprite();
+	}
+	[[nodiscard]] Displacement getRenderingOffset(const ClxSprite sprite) const
+	{
+		Displacement offset = { -CalculateSpriteTileCenterX(sprite.width()), 0 };
+		if (isWalking())
+			offset += GetOffsetForWalking(AnimInfo, _pdir);
+		return offset;
+	}
+
+	/**
+	 * @brief Updates previewCelSprite according to new requested command
+	 * @param cmdId What command is requested
+	 * @param point Point for the command
+	 * @param wParam1 First Parameter
+	 * @param wParam2 Second Parameter
+	 */
+	void UpdatePreviewCelSprite(_cmd_id cmdId, Point point, uint16_t wParam1, uint16_t wParam2);
+
+	[[nodiscard]] uint8_t getCharacterLevel() const
+	{
+		return _pLevel;
+	}
+
+	/**
+	 * @brief Sets the character level to the target level or nearest valid value.
+	 * @param level New character level, will be clamped to the allowed range
+	 */
+	void setCharacterLevel(uint8_t level);
+
+	[[nodiscard]] uint8_t getMaxCharacterLevel() const;
+
+	[[nodiscard]] bool isMaxCharacterLevel() const
+	{
+		return getCharacterLevel() >= getMaxCharacterLevel();
+	}
+
+private:
+	void _addExperience(uint32_t experience, int levelDelta);
+
+public:
+	/**
+	 * @brief Adds experience to the local player based on the current game mode
+	 * @param experience base value to add, this will be adjusted to prevent power leveling in multiplayer games
+	 */
+	void addExperience(uint32_t experience)
+	{
+		_addExperience(experience, 0);
+	}
+
+	/**
+	 * @brief Adds experience to the local player based on the difference between the monster level
+	 * and current level, then also applying the power level cap in multiplayer games.
+	 * @param experience base value to add, will be scaled up/down by the difference between player and monster level
+	 * @param monsterLevel level of the monster that has rewarded this experience
+	 */
+	void addExperience(uint32_t experience, int monsterLevel)
+	{
+		_addExperience(experience, monsterLevel - getCharacterLevel());
+	}
+
+	[[nodiscard]] uint32_t getNextExperienceThreshold() const;
+
+	/** @brief Checks if the player is on the same level as the local player (MyPlayer). */
+	bool isOnActiveLevel() const
+	{
+		if (setlevel)
+			return isOnLevel(setlvlnum);
+		return isOnLevel(currlevel);
+	}
+
+	/** @brief Checks if the player is on the corresponding level. */
+	bool isOnLevel(uint8_t level) const
+	{
+		return !this->plrIsOnSetLevel && this->plrlevel == level;
+	}
+	/** @brief Checks if the player is on the corresponding level. */
+	bool isOnLevel(_setlevels level) const
+	{
+		return this->plrIsOnSetLevel && this->plrlevel == static_cast<uint8_t>(level);
+	}
+	/** @brief Checks if the player is on a arena level. */
+	bool isOnArenaLevel() const
+	{
+		return plrIsOnSetLevel && IsArenaLevel(static_cast<_setlevels>(plrlevel));
+	}
+	void setLevel(uint8_t level)
+	{
+		this->plrlevel = level;
+		this->plrIsOnSetLevel = false;
+	}
+	void setLevel(_setlevels level)
+	{
+		this->plrlevel = static_cast<uint8_t>(level);
+		this->plrIsOnSetLevel = true;
+	}
+
+	/** @brief Returns a character's life based on starting life, character level, and base vitality. */
+	Fixed26_6 calculateBaseLife() const;
+
+	/** @brief Returns a character's mana based on starting mana, character level, and base magic. */
+	Fixed26_6 calculateBaseMana() const;
+
+	/**
+	 * @brief Sets a tile/dPlayer to be occupied by the player
+	 * @param position tile to update
+	 * @param isMoving specifies whether the player is moving or not (true/moving results in a negative index in dPlayer)
+	 */
+	void occupyTile(Point position, bool isMoving) const;
+
+	/** @brief Checks if the player level is owned by local client. */
+	bool isLevelOwnedByLocalClient() const;
+
+	/** @brief Checks if the player is holding an item of the provided type, and is usable. */
+	bool isHoldingItem(const ItemType type) const
+	{
+		const Item &leftHandItem = InvBody[INVLOC_HAND_LEFT];
+		const Item &rightHandItem = InvBody[INVLOC_HAND_RIGHT];
+
+		return (type == leftHandItem._itype && leftHandItem._iStatFlag) || (type == rightHandItem._itype && rightHandItem._iStatFlag);
+	}
+
+	bool hasNoLife() const
+	{
+		return leveltype == DTYPE_TOWN ? false : _pHitPoints.whole() <= 0;
+	}
+
+	bool hasNoMana() const
+	{
+		return _pMana.whole() <= 0;
+	}
 };
 
-extern int myplr;
-extern PlayerStruct plr[MAX_PLRS];
-extern bool deathflag;
-extern int ToBlkTbl[enum_size<HeroClass>::value];
+extern DVL_API_FOR_TEST uint8_t MyPlayerId;
+extern DVL_API_FOR_TEST Player *MyPlayer;
+extern DVL_API_FOR_TEST std::vector<Player> Players;
+/** @brief What Player items and stats should be displayed? Normally this is identical to MyPlayer but can differ when /inspect was used. */
+extern Player *InspectPlayer;
+/** @brief Do we currently inspect a remote player (/inspect was used)? In this case the (remote) players items and stats can't be modified. */
+inline bool IsInspectingPlayer()
+{
+	return MyPlayer != InspectPlayer;
+}
+extern bool MyPlayerIsDead;
 
-void LoadPlrGFX(int pnum, player_graphic gfxflag);
-void InitPlayerGFX(int pnum);
-void InitPlrGFXMem(int pnum);
-void FreePlayerGFX(int pnum);
+Player *PlayerAtPosition(Point position, bool ignoreMovingPlayers = false);
+
+/**
+ * @brief Get the players current portrait sprite which is used for the party panel.
+ * @param player
+ */
+ClxSprite GetPlayerPortraitSprite(Player &player);
+bool IsPlayerUnarmed(Player &player);
+
+void LoadPlrGFX(Player &player, player_graphic graphic);
+void InitPlayerGFX(Player &player);
+void ResetPlayerGFX(Player &player);
+
 /**
  * @brief Sets the new Player Animation with all relevant information for rendering
-
- * @param pnum Player Id
- * @param Peq Pointer to Animation Data
- * @param numFrames Number of Frames in Animation
- * @param Delay Delay after each Animation sequence
- * @param width Width of sprite
+ * @param player The player to set the animation for
+ * @param graphic What player animation should be displayed
+ * @param dir Direction of the animation
+ * @param numberOfFrames Number of Frames in Animation
+ * @param delayLen Delay after each Animation sequence
+ * @param flags Specifies what special logics are applied to this Animation
  * @param numSkippedFrames Number of Frames that will be skipped (for example with modifier "faster attack")
- * @param processAnimationPending true if first ProcessAnimation will be called in same gametick after NewPlrAnim
- * @param stopDistributingAfterFrame Distribute the NumSkippedFrames only before this frame
+ * @param distributeFramesBeforeFrame Distribute the numSkippedFrames only before this frame
  */
-void NewPlrAnim(int pnum, BYTE *Peq, int numFrames, int Delay, int width, int numSkippedFrames = 0, bool processAnimationPending = false, int stopDistributingAfterFrame = 0);
-void SetPlrAnims(int pnum);
-void ProcessPlayerAnimation(int pnum);
-/**
- * @brief Calculates the Frame to use for the Animation rendering
- * @param pPlayer Player
- * @return The Frame to use for rendering
- */
-int GetFrameToUseForPlayerRendering(const PlayerStruct *pPlayer);
-void CreatePlayer(int pnum, HeroClass c);
-int CalcStatDiff(int pnum);
+void NewPlrAnim(Player &player, player_graphic graphic, Direction dir, AnimationDistributionFlags flags = AnimationDistributionFlags::None, int8_t numSkippedFrames = 0, int8_t distributeFramesBeforeFrame = 0);
+void SetPlrAnims(Player &player);
+void CreatePlayer(Player &player, HeroClass c);
+int CalcStatDiff(Player &player);
 #ifdef _DEBUG
-void NextPlrLevel(int pnum);
+void NextPlrLevel(Player &player);
 #endif
-void AddPlrExperience(int pnum, int lvl, int exp);
-void AddPlrMonstExper(int lvl, int exp, char pmask);
-void ApplyPlrDamage(int pnum, int dam, int minHP = 0, int frac = 0, int earflag = 0);
-void InitPlayer(int pnum, bool FirstTime);
+void AddPlrMonstExper(int lvl, unsigned int exp, char pmask);
+void ApplyPlrDamage(DamageType damageType, Player &player, Fixed26_6 dam, int minHP = 0, DeathReason deathReason = DeathReason::MonsterOrTrap);
+void InitPlayer(Player &player, bool FirstTime);
 void InitMultiView();
-bool SolidLoc(int x, int y);
-void PlrClrTrans(int x, int y);
-void PlrDoTrans(int x, int y);
-void SetPlayerOld(int pnum);
-void FixPlayerLocation(int pnum, direction bDir);
-void StartStand(int pnum, direction dir);
-void StartAttack(int pnum, direction d);
-void StartPlrBlock(int pnum, direction dir);
-void FixPlrWalkTags(int pnum);
-void RemovePlrFromMap(int pnum);
-void StartPlrHit(int pnum, int dam, bool forcehit);
-void StartPlayerKill(int pnum, int earflag);
-void DropHalfPlayersGold(int pnum);
-void StripTopGold(int pnum);
-void SyncPlrKill(int pnum, int earflag);
-void RemovePlrMissiles(int pnum);
-void StartNewLvl(int pnum, interface_mode fom, int lvl);
-void RestartTownLvl(int pnum);
-void StartWarpLvl(int pnum, int pidx);
+void PlrClrTrans(Point position);
+void PlrDoTrans(Point position);
+void SetPlayerOld(Player &player);
+void FixPlayerLocation(Player &player, Direction bDir);
+void StartStand(Player &player, Direction dir);
+void StartPlrBlock(Player &player, Direction dir);
+void FixPlrWalkTags(const Player &player);
+void StartPlrHit(Player &player, Fixed26_6 dam, bool forcehit);
+void StartPlayerKill(Player &player, DeathReason deathReason);
+/**
+ * @brief Strip the top off gold piles that are larger than MaxGold
+ */
+void StripTopGold(Player &player);
+void SyncPlrKill(Player &player, DeathReason deathReason);
+void RemovePlrMissiles(const Player &player);
+void StartNewLvl(Player &player, interface_mode fom, int lvl);
+void RestartTownLvl(Player &player);
+void StartWarpLvl(Player &player, size_t pidx);
 void ProcessPlayers();
-void ClrPlrPath(int pnum);
-bool PosOkPlayer(int pnum, int x, int y);
-void MakePlrPath(int pnum, int xx, int yy, bool endspace);
-void CheckPlrSpell();
-void SyncPlrAnim(int pnum);
-void SyncInitPlrPos(int pnum);
-void SyncInitPlr(int pnum);
-void CheckStats(int p);
-void ModifyPlrStr(int p, int l);
-void ModifyPlrMag(int p, int l);
-void ModifyPlrDex(int p, int l);
-void ModifyPlrVit(int p, int l);
-void SetPlayerHitPoints(int pnum, int val);
-void SetPlrStr(int p, int v);
-void SetPlrMag(int p, int v);
-void SetPlrDex(int p, int v);
-void SetPlrVit(int p, int v);
-void InitDungMsgs(int pnum);
+void ClrPlrPath(Player &player);
+bool PosOkPlayer(const Player &player, Point position);
+/**
+ * @brief Checks if the player is close enough to the object to operate it without walking.
+ */
+bool IsPlayerAdjacentToObject(const Player &player, const Object &object);
+void MakePlrPath(Player &player, Point targetPosition, bool endspace);
+void CheckPlrSpell(bool isShiftHeld, SpellID spellID = MyPlayer->_pRSpell, SpellType spellType = MyPlayer->_pRSplType);
+void SyncPlrAnim(Player &player);
+void SyncInitPlrPos(Player &player);
+void SyncInitPlr(Player &player);
+void CheckStats(Player &player);
+void ModifyPlrStr(Player &player, int l);
+void ModifyPlrMag(Player &player, int l);
+void ModifyPlrDex(Player &player, int l);
+void ModifyPlrVit(Player &player, int l);
+void SetPlayerHitPoints(Player &player, Fixed26_6 val);
+void SetPlrStr(Player &player, int v);
+void SetPlrMag(Player &player, int v);
+void SetPlrDex(Player &player, int v);
+void SetPlrVit(Player &player, int v);
+void InitDungMsgs(Player &player);
 void PlayDungMsgs();
-
-/* data */
-
-extern int plrxoff[9];
-extern int plryoff[9];
-extern int plrxoff2[9];
-extern int plryoff2[9];
-extern int StrengthTbl[enum_size<HeroClass>::value];
-extern int MagicTbl[enum_size<HeroClass>::value];
-extern int DexterityTbl[enum_size<HeroClass>::value];
-extern int VitalityTbl[enum_size<HeroClass>::value];
-extern int ExpLvlsTbl[MAXCHARLEVEL];
 
 } // namespace devilution

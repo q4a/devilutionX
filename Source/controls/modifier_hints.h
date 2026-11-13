@@ -1,9 +1,11 @@
 #pragma once
 
-#include "engine.h"
+#include "engine/surface.hpp"
 
 namespace devilution {
 
-void DrawControllerModifierHints(const CelOutputBuffer &out);
+void DrawControllerModifierHints(const Surface &out);
+void InitModifierHints();
+void FreeModifierHints();
 
 } // namespace devilution

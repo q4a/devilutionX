@@ -1,131 +1,205 @@
 #include "utils/paths.h"
 
+#include <optional>
+#include <string>
+#include <string_view>
+
+#ifdef USE_SDL3
+#include <SDL3/SDL_error.h>
+#include <SDL3/SDL_filesystem.h>
+#else
 #include <SDL.h>
+#endif
+
+#include "appfat.h"
+#include "utils/file_util.h"
+#include "utils/log.hpp"
+#include "utils/sdl_ptrs.h"
+
+#ifdef __IPHONEOS__
+#include "platform/ios/ios_paths.h"
+#endif
+
+#ifdef NXDK
+#define NOMINMAX 1
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
 
 #ifdef USE_SDL1
 #include "utils/sdl2_to_1_2_backports.h"
 #endif
 
-#ifndef TTF_FONT_DIR
-#define TTF_FONT_DIR ""
-#endif
-
-#ifndef TTF_FONT_NAME
-#define TTF_FONT_NAME "CharisSILB.ttf"
-#endif
-
 namespace devilution {
+
+namespace paths {
 
 namespace {
 
-std::string *basePath = nullptr;
-std::string *prefPath = nullptr;
-std::string *configPath = nullptr;
-std::string *ttfPath = nullptr;
-std::string *ttfName = nullptr;
+std::optional<std::string> basePath;
+std::optional<std::string> prefPath;
+std::optional<std::string> configPath;
+std::optional<std::string> assetsPath;
 
-void AddTrailingSlash(std::string *path)
+void AddTrailingSlash(std::string &path)
 {
-#ifdef _WIN32
-	if (!path->empty() && path->back() != '\\')
-		*path += '\\';
-#else
-	if (!path->empty() && path->back() != '/')
-		*path += '/';
-#endif
+	if (!path.empty() && path.back() != DirectorySeparator)
+		path += DirectorySeparator;
 }
 
-std::string *FromSDL(char *s)
+[[maybe_unused]] std::string FromSDL(char *s)
 {
-	auto *result = new std::string(s != nullptr ? s : "");
-	if (s != nullptr) {
-		SDL_free(s);
-	} else {
-		SDL_Log("%s", SDL_GetError());
+	const SDLUniquePtr<char> pinned(s);
+	std::string result = (s != nullptr ? s : "");
+	if (s == nullptr) {
+		Log("{}", SDL_GetError());
 		SDL_ClearError();
 	}
 	return result;
 }
 
+#ifdef NXDK
+const std::string &NxdkGetPrefPath()
+{
+	static const std::string Path = []() {
+		const char *path = "E:\\UDATA\\devilutionx\\";
+		if (CreateDirectoryA(path, nullptr) == FALSE && ::GetLastError() != ERROR_ALREADY_EXISTS) {
+			DirErrorDlg(path);
+		}
+		return path;
+	}();
+	return Path;
+}
+#endif
+
+std::string GetSdlBasePath()
+{
+	std::string result;
+#if defined(__DJGPP__)
+	// In DOS, use an empty base path.
+#elif defined(USE_SDL3)
+	const char *s = SDL_GetBasePath();
+	if (s == nullptr) {
+		LogError("{}", SDL_GetError());
+		SDL_ClearError();
+	} else {
+		result = s;
+	}
+#else
+	result = FromSDL(SDL_GetBasePath());
+#endif
+	return result;
+}
+
 } // namespace
 
-const std::string &GetBasePath()
+const std::string &BasePath()
 {
-#ifdef __vita__
-	if (basePath == NULL)
-		basePath = new std::string(GetPrefPath());
-#else
-	if (basePath == nullptr)
-		basePath = FromSDL(SDL_GetBasePath());
-#endif
+	if (!basePath) {
+		basePath = GetSdlBasePath();
+	}
 	return *basePath;
 }
 
-const std::string &GetPrefPath()
+const std::string &PrefPath()
 {
-	if (prefPath == nullptr)
+	if (!prefPath) {
+#if defined(__DJGPP__)
+		prefPath = std::string();
+#elif defined(__IPHONEOS__)
+		prefPath = FromSDL(IOSGetPrefPath());
+#elif defined(NXDK)
+		prefPath = NxdkGetPrefPath();
+#else
 		prefPath = FromSDL(SDL_GetPrefPath("diasurgical", "devilution"));
+#if !defined(__amigaos__) && !defined(__DJGPP__)
+		if (FileExistsAndIsWriteable("diablo.ini")) {
+			prefPath = std::string();
+		}
+#endif
+#endif
+	}
 	return *prefPath;
 }
 
-const std::string &GetConfigPath()
+const std::string &ConfigPath()
 {
-	if (configPath == nullptr)
+	if (!configPath) {
+#if defined(__DJGPP__)
+		configPath = std::string();
+#elif defined(__IPHONEOS__)
+		configPath = FromSDL(IOSGetPrefPath());
+#elif defined(NXDK)
+		configPath = NxdkGetPrefPath();
+#else
 		configPath = FromSDL(SDL_GetPrefPath("diasurgical", "devilution"));
+#if !defined(__amigaos__) && !defined(__DJGPP__)
+		if (FileExistsAndIsWriteable("diablo.ini")) {
+			configPath = std::string();
+		}
+#endif
+#endif
+	}
 	return *configPath;
 }
 
-const std::string &GetTtfPath()
+const std::string &AssetsPath()
 {
-	if (ttfPath == nullptr)
-		ttfPath = new std::string(TTF_FONT_DIR);
-	return *ttfPath;
+	if (!assetsPath) {
+#if __EMSCRIPTEN__ || defined(__DJGPP__)
+		assetsPath.emplace("assets" DIRECTORY_SEPARATOR_STR);
+#elif defined(NXDK)
+		assetsPath.emplace("D:\\assets\\");
+#elif defined(__3DS__) || defined(__SWITCH__)
+		assetsPath.emplace("romfs:/assets/");
+#elif defined(__APPLE__) && (defined(USE_SDL1) || defined(USE_SDL3))
+		// In `Info.plist` we have
+		//
+		//    <key>SDL_FILESYSTEM_BASE_DIR_TYPE</key>
+		//    <string>resource</string>
+		//
+		// This means `SDL_GetBasePath()` returns exedir for non-bundled
+		// and the `app_dir.app/Resources/` for bundles.
+		//
+		// Our built-in resources are directly in the `devilutionx.app/Resources` directory
+		// and are normally looked up via a relative lookup in `FindAsset`.
+		// In SDL2, this is implemented by calling `SDL_OpenFPFromBundleOrFallback`
+		// from `SDL_RWFromFile` but SDL1 doesn't do it, so we set the directory explicitly.
+		//
+		// Note that SDL3 reverts to SDL1 behaviour!
+		// https://github.com/libsdl-org/SDL/blob/962268ca21ed10b9cee31198c22681099293f20a/docs/README-migration.md?plain=1#L1623
+		assetsPath.emplace(GetSdlBasePath());
+#else
+		assetsPath.emplace(GetSdlBasePath() + ("assets" DIRECTORY_SEPARATOR_STR));
+#endif
+	}
+	return *assetsPath;
 }
 
-const std::string &GetTtfName()
+void SetBasePath(const std::string &path)
 {
-	if (ttfName == nullptr)
-		ttfName = new std::string(TTF_FONT_NAME);
-	return *ttfName;
+	basePath = path;
+	AddTrailingSlash(*basePath);
 }
 
-void SetBasePath(const char *path)
+void SetPrefPath(const std::string &path)
 {
-	if (basePath == nullptr)
-		basePath = new std::string;
-	*basePath = path;
-	AddTrailingSlash(basePath);
+	prefPath = path;
+	AddTrailingSlash(*prefPath);
 }
 
-void SetPrefPath(const char *path)
+void SetConfigPath(const std::string &path)
 {
-	if (prefPath == nullptr)
-		prefPath = new std::string;
-	*prefPath = path;
-	AddTrailingSlash(prefPath);
+	configPath = path;
+	AddTrailingSlash(*configPath);
 }
 
-void SetConfigPath(const char *path)
+void SetAssetsPath(const std::string &path)
 {
-	if (configPath == nullptr)
-		configPath = new std::string;
-	*configPath = path;
-	AddTrailingSlash(configPath);
+	assetsPath = path;
+	AddTrailingSlash(*assetsPath);
 }
 
-void SetTtfPath(const char *path)
-{
-	if (ttfPath == nullptr)
-		ttfPath = new std::string;
-	*ttfPath = path;
-	AddTrailingSlash(ttfPath);
-}
-
-void SetTtfName(const char *path)
-{
-	if (ttfName == nullptr)
-		ttfName = new std::string;
-	*ttfName = path;
-}
+} // namespace paths
 
 } // namespace devilution

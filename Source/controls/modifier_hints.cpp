@@ -1,142 +1,184 @@
 #include "controls/modifier_hints.h"
 
 #include <cstddef>
+#include <cstdint>
 
-#include "control.h"
-#include "controls/controller.h"
+#include "DiabloUI/ui_flags.hpp"
+#include "control/control.hpp"
+#include "controls/controller_motion.h"
 #include "controls/game_controls.h"
+#include "controls/plrctrls.h"
+#include "engine/clx_sprite.hpp"
+#include "engine/load_clx.hpp"
+#include "engine/render/clx_render.hpp"
+#include "engine/render/text_render.hpp"
 #include "options.h"
+#include "panels/spell_book.hpp"
+#include "panels/spell_icons.hpp"
+#include "utils/language.h"
 
 namespace devilution {
 
 namespace {
 
-int CalculateTextWidth(const char *s)
-{
-	int l = 0;
-	while (*s != '\0') {
-		l += fontkern[fontframe[gbFontTransTbl[static_cast<unsigned char>(*s++)]]] + 1;
-	}
-	return l;
-}
+/** Vertical distance between text lines. */
+constexpr int LineHeight = 25;
 
-int SpaceWidth()
-{
-	static const int spaceWidth = CalculateTextWidth(" ");
-	return spaceWidth;
-}
+/** Horizontal margin of the hints circle from panel edge. */
+constexpr int CircleMarginX = 16;
 
-struct CircleMenuHint {
-	CircleMenuHint(bool isDpad, const char *top, const char *right, const char *bottom, const char *left)
-	    : is_dpad(isDpad)
-	    , top(top)
-	    , top_w(CalculateTextWidth(top))
-	    , right(right)
-	    , right_w(CalculateTextWidth(right))
-	    , bottom(bottom)
-	    , bottom_w(CalculateTextWidth(bottom))
-	    , left(left)
-	    , left_w(CalculateTextWidth(left))
-	    , x_mid(left_w + SpaceWidth() * 2.5)
-	{
-	}
+/** Distance between the panel top and the circle top. */
+constexpr int CircleTop = 101;
 
-	int Width() const
-	{
-		return 2 * x_mid;
-	}
+/** Spell icon side size. */
+constexpr int IconSize = 37;
 
-	bool is_dpad;
+constexpr int HintBoxSize = 39;
+constexpr int HintBoxMargin = 5;
 
-	const char *top;
-	int top_w;
-	const char *right;
-	int right_w;
-	const char *bottom;
-	int bottom_w;
-	const char *left;
-	int left_w;
+OptionalOwnedClxSpriteList hintBox;
+OptionalOwnedClxSpriteList hintBoxBackground;
+OptionalOwnedClxSpriteList hintIcons;
 
-	int x_mid;
+enum HintIcon : uint8_t {
+	IconChar,
+	IconInv,
+	IconQuests,
+	IconSpells,
+	IconMap,
+	IconMenu,
+	IconNull
 };
 
-bool IsTopActive(const CircleMenuHint &hint)
-{
-	if (hint.is_dpad)
-		return IsControllerButtonPressed(ControllerButton_BUTTON_DPAD_UP);
-	return IsControllerButtonPressed(ControllerButton_BUTTON_Y);
-}
-
-bool IsRightActive(const CircleMenuHint &hint)
-{
-	if (hint.is_dpad)
-		return IsControllerButtonPressed(ControllerButton_BUTTON_DPAD_RIGHT);
-	return IsControllerButtonPressed(ControllerButton_BUTTON_B);
-}
-
-bool IsBottomActive(const CircleMenuHint &hint)
-{
-	if (hint.is_dpad)
-		return IsControllerButtonPressed(ControllerButton_BUTTON_DPAD_DOWN);
-	return IsControllerButtonPressed(ControllerButton_BUTTON_A);
-}
-
-bool IsLeftActive(const CircleMenuHint &hint)
-{
-	if (hint.is_dpad)
-		return IsControllerButtonPressed(ControllerButton_BUTTON_DPAD_LEFT);
-	return IsControllerButtonPressed(ControllerButton_BUTTON_X);
-}
-
-text_color CircleMenuHintTextColor(bool active)
-{
-	return active ? COL_BLUE : COL_GOLD;
-}
-
-void DrawCircleMenuHint(const CelOutputBuffer &out, const CircleMenuHint &hint, int x, int y)
-{
-	const int lineHeight = 25;
-	PrintGameStr(out, x + hint.x_mid - hint.top_w / 2, y, hint.top, CircleMenuHintTextColor(IsTopActive(hint)));
-	y += lineHeight;
-
-	PrintGameStr(out, x, y, hint.left, CircleMenuHintTextColor(IsLeftActive(hint)));
-	PrintGameStr(out, x + hint.left_w + 5 * SpaceWidth(), y, hint.right, CircleMenuHintTextColor(IsRightActive(hint)));
-	y += lineHeight;
-
-	PrintGameStr(out, x + hint.x_mid - hint.bottom_w / 2, y, hint.bottom, CircleMenuHintTextColor(IsBottomActive(hint)));
-}
-
-const int CircleMarginX = 16;
-const int CirclesTop = 76;
-
-void DrawStartModifierMenu(const CelOutputBuffer &out)
-{
-	if (!start_modifier_active)
-		return;
-	static const CircleMenuHint dPad(/*is_dpad=*/true, /*top=*/"Menu", /*right=*/"Inv", /*bottom=*/"Map", /*left=*/"Char");
-	static const CircleMenuHint buttons(/*is_dpad=*/false, /*top=*/"", /*right=*/"", /*bottom=*/"Spells", /*left=*/"Quests");
-	DrawCircleMenuHint(out, dPad, PANEL_LEFT + CircleMarginX, PANEL_TOP - CirclesTop);
-	DrawCircleMenuHint(out, buttons, PANEL_LEFT + PANEL_WIDTH - buttons.Width() - CircleMarginX, PANEL_TOP - CirclesTop);
-}
-
-void DrawSelectModifierMenu(const CelOutputBuffer &out)
-{
-	if (!select_modifier_active)
-		return;
-	if (sgOptions.Controller.bDpadHotkeys) {
-		static const CircleMenuHint dPad(/*is_dpad=*/true, /*top=*/"F6", /*right=*/"F8", /*bottom=*/"F7", /*left=*/"F5");
-		DrawCircleMenuHint(out, dPad, PANEL_LEFT + CircleMarginX, PANEL_TOP - CirclesTop);
+struct CircleMenuHint {
+	CircleMenuHint(HintIcon top, HintIcon right, HintIcon bottom, HintIcon left)
+	    : top(top)
+	    , right(right)
+	    , bottom(bottom)
+	    , left(left)
+	{
 	}
-	static const CircleMenuHint spells(/*is_dpad=*/false, "F6", "F8", "F7", "F5");
-	DrawCircleMenuHint(out, spells, PANEL_LEFT + PANEL_WIDTH - spells.Width() - CircleMarginX, PANEL_TOP - CirclesTop);
+
+	HintIcon top;
+	HintIcon right;
+	HintIcon bottom;
+	HintIcon left;
+};
+
+/**
+ * @brief Draws hint text for a four button layout with the top/left edge of the bounding box at the position given by origin.
+ * @param out The output buffer to draw on.
+ * @param hint Struct describing the icon to draw.
+ * @param origin Top left corner of the layout (relative to the output buffer).
+ */
+void DrawCircleMenuHint(const Surface &out, const CircleMenuHint &hint, const Point &origin)
+{
+	const Displacement backgroundDisplacement = { ((HintBoxSize - IconSize) / 2) + 1, ((HintBoxSize - IconSize) / 2) - 1 };
+	const Point hintBoxPositions[4] = {
+		origin + Displacement { 0, LineHeight - HintBoxSize },
+		origin + Displacement { HintBoxSize + HintBoxMargin, LineHeight - (HintBoxSize * 2) - HintBoxMargin },
+		origin + Displacement { HintBoxSize + HintBoxMargin, LineHeight + HintBoxMargin },
+		origin + Displacement { (HintBoxSize * 2) + (HintBoxMargin * 2), LineHeight - HintBoxSize }
+	};
+	const Point iconPositions[4] = {
+		hintBoxPositions[0] + backgroundDisplacement,
+		hintBoxPositions[1] + backgroundDisplacement,
+		hintBoxPositions[2] + backgroundDisplacement,
+		hintBoxPositions[3] + backgroundDisplacement,
+	};
+	const uint8_t iconIndices[4] { hint.left, hint.top, hint.bottom, hint.right };
+
+	for (int slot = 0; slot < 4; ++slot) {
+		if (iconIndices[slot] == HintIcon::IconNull)
+			continue;
+
+		RenderClxSprite(out, (*hintBoxBackground)[0], iconPositions[slot]);
+		RenderClxSprite(out.subregion(iconPositions[slot].x, iconPositions[slot].y, 37, 38), (*hintIcons)[iconIndices[slot]], { 0, 0 });
+		RenderClxSprite(out, (*hintBox)[0], hintBoxPositions[slot]);
+	}
+}
+
+/**
+ * @brief Draws hint text for a four button layout with the top/left edge of the bounding box at the position given by origin plus the icon for the spell mapped to that entry.
+ * @param out The output buffer to draw on.
+ * @param origin Top left corner of the layout (relative to the output buffer).
+ */
+void DrawSpellsCircleMenuHint(const Surface &out, const Point &origin)
+{
+	const Player &myPlayer = *MyPlayer;
+	const Displacement spellIconDisplacement = { ((HintBoxSize - IconSize) / 2) + 1, HintBoxSize - ((HintBoxSize - IconSize) / 2) - 1 };
+	const Point hintBoxPositions[4] = {
+		origin + Displacement { 0, LineHeight - HintBoxSize },
+		origin + Displacement { HintBoxSize + HintBoxMargin, LineHeight - (HintBoxSize * 2) - HintBoxMargin },
+		origin + Displacement { HintBoxSize + HintBoxMargin, LineHeight + HintBoxMargin },
+		origin + Displacement { (HintBoxSize * 2) + (HintBoxMargin * 2), LineHeight - HintBoxSize }
+	};
+	const Point spellIconPositions[4] = {
+		hintBoxPositions[0] + spellIconDisplacement,
+		hintBoxPositions[1] + spellIconDisplacement,
+		hintBoxPositions[2] + spellIconDisplacement,
+		hintBoxPositions[3] + spellIconDisplacement,
+	};
+	const uint64_t spells = myPlayer._pAblSpells | myPlayer._pMemSpells | myPlayer._pScrlSpells | myPlayer._pISpells;
+	SpellID splId;
+	SpellType splType;
+
+	for (int slot = 0; slot < 4; ++slot) {
+		splId = myPlayer._pSplHotKey[slot];
+
+		if (IsValidSpell(splId) && (spells & GetSpellBitmask(splId)) != 0)
+			splType = (leveltype == DTYPE_TOWN && !GetSpellData(splId).isAllowedInTown()) ? SpellType::Invalid : myPlayer._pSplTHotKey[slot];
+		else {
+			splType = SpellType::Invalid;
+			splId = SpellID::Null;
+		}
+
+		SetSpellTrans(splType);
+		DrawSmallSpellIcon(out, spellIconPositions[slot], splId);
+		RenderClxSprite(out, (*hintBox)[0], hintBoxPositions[slot]);
+	}
+}
+
+void DrawGamepadMenuNavigator(const Surface &out)
+{
+	if (!PadMenuNavigatorActive || SimulatingMouseWithPadmapper)
+		return;
+	static const CircleMenuHint DPad(/*top=*/HintIcon::IconMenu, /*right=*/HintIcon::IconInv, /*bottom=*/HintIcon::IconMap, /*left=*/HintIcon::IconChar);
+	static const CircleMenuHint Buttons(/*top=*/HintIcon::IconNull, /*right=*/HintIcon::IconNull, /*bottom=*/HintIcon::IconSpells, /*left=*/HintIcon::IconQuests);
+	const Rectangle &mainPanel = GetMainPanel();
+	DrawCircleMenuHint(out, DPad, { mainPanel.position.x + CircleMarginX, mainPanel.position.y - CircleTop });
+	DrawCircleMenuHint(out, Buttons, { mainPanel.position.x + mainPanel.size.width - (HintBoxSize * 3) - CircleMarginX - (HintBoxMargin * 2), mainPanel.position.y - CircleTop });
+}
+
+void DrawGamepadHotspellMenu(const Surface &out)
+{
+	if (!PadHotspellMenuActive || SimulatingMouseWithPadmapper)
+		return;
+
+	const Rectangle &mainPanel = GetMainPanel();
+	DrawSpellsCircleMenuHint(out, { mainPanel.position.x + mainPanel.size.width - (HintBoxSize * 3) - CircleMarginX - (HintBoxMargin * 2), mainPanel.position.y - CircleTop });
 }
 
 } // namespace
 
-void DrawControllerModifierHints(const CelOutputBuffer &out)
+void InitModifierHints()
 {
-	DrawStartModifierMenu(out);
-	DrawSelectModifierMenu(out);
+	hintBox = LoadClx("data\\hintbox.clx");
+	hintBoxBackground = LoadClx("data\\hintboxbackground.clx");
+	hintIcons = LoadClx("data\\hinticons.clx");
+}
+
+void FreeModifierHints()
+{
+	hintIcons = std::nullopt;
+	hintBoxBackground = std::nullopt;
+	hintBox = std::nullopt;
+}
+
+void DrawControllerModifierHints(const Surface &out)
+{
+	DrawGamepadMenuNavigator(out);
+	DrawGamepadHotspellMenu(out);
 }
 
 } // namespace devilution

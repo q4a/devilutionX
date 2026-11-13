@@ -5,19 +5,40 @@
  */
 #pragma once
 
-#include <stdint.h>
+#include <cstdint>
+
+#ifdef USE_SDL3
+#include <SDL3/SDL_events.h>
+#include <SDL3/SDL_keycode.h>
+#else
+#include <SDL.h>
+
+#ifdef USE_SDL1
+#include "utils/sdl2_to_1_2_backports.h"
+#endif
+#endif
 
 #ifdef _DEBUG
-#include "monstdat.h"
+#include "tables/monstdat.h"
 #endif
-#include "gendung.h"
-#include "init.h"
+#include "levels/gendung.h"
+#include "utils/attributes.h"
+#include "utils/endian_read.hpp"
 
 namespace devilution {
 
-#define GAME_ID (gbIsHellfire ? (gbIsSpawn ? LOAD_BE32("HSHR") : LOAD_BE32("HRTL")) : (gbIsSpawn ? LOAD_BE32("DSHR") : LOAD_BE32("DRTL")))
+// Base game branding ids.
+constexpr uint32_t GameIdDiabloFull = LoadBE32("DRTL");  // Diablo Retail (full game)
+constexpr uint32_t GameIdDiabloSpawn = LoadBE32("DSHR"); // Diablo Shareware (spawn)
+/** Generic ID for mods that do not set there own. */
+constexpr uint32_t GameIdGenericMod = LoadBE32("DXMD"); // DevilutionX + mod
 
-#define NUMLEVELS 25
+/**
+ * @brief The multiplayer game mode branding id.
+ *
+ * This is a cosmetic branding identifier (shown in the game browser / chat), NOT a compatibility check.
+ */
+[[nodiscard]] uint32_t GetGameId();
 
 enum clicktype : int8_t {
 	CLICK_NONE,
@@ -25,59 +46,81 @@ enum clicktype : int8_t {
 	CLICK_RIGHT,
 };
 
-extern SDL_Window *ghMainWnd;
-extern DWORD glSeedTbl[NUMLEVELS];
-extern dungeon_type gnLevelTypeTbl[NUMLEVELS];
-extern int MouseX;
-extern int MouseY;
-extern bool gbRunGame;
-extern bool gbRunGameResult;
-extern bool zoomflag;
-extern bool gbProcessPlayers;
-extern bool gbLoadGame;
-extern bool cineflag;
-extern int force_redraw;
-/* These are defined in fonts.h */
-extern bool was_fonts_init;
-extern void FontsCleanup();
-extern bool light4flag;
-extern int PauseMode;
-extern bool gbNestArt;
-extern bool gbBard;
-extern bool gbBarbarian;
-extern clicktype sgbMouseDown;
-extern WORD gnTickDelay;
+/**
+ * @brief Specifies what game logic step is currently executed
+ */
+enum class GameLogicStep : uint8_t {
+	None,
+	ProcessPlayers,
+	ProcessMonsters,
+	ProcessObjects,
+	ProcessMissiles,
+	ProcessItems,
+	ProcessTowners,
+	ProcessItemsTown,
+	ProcessMissilesTown,
+};
 
+enum class PlayerActionType : uint8_t {
+	None,
+	Walk,
+	Spell,
+	SpellMonsterTarget,
+	SpellPlayerTarget,
+	Attack,
+	AttackMonsterTarget,
+	AttackPlayerTarget,
+	OperateObject,
+};
+
+extern DVL_API_FOR_TEST Point MousePosition;
+
+extern bool gbRunGameResult;
+extern bool ReturnToMainMenu;
+extern bool gbProcessPlayers;
+extern DVL_API_FOR_TEST bool gbLoadGame;
+extern bool cineflag;
+/* These are defined in fonts.h */
+extern void FontsCleanup();
+extern DVL_API_FOR_TEST int PauseMode;
+extern clicktype sgbMouseDown;
+extern uint16_t gnTickDelay;
+extern char gszProductName[64];
+
+extern PlayerActionType LastPlayerAction;
+
+void InitKeymapActions();
+void SetCursorPos(Point position);
 void FreeGameMem();
 bool StartGame(bool bNewGame, bool bSinglePlayer);
 [[noreturn]] void diablo_quit(int exitStatus);
 int DiabloMain(int argc, char **argv);
 bool TryIconCurs();
 void diablo_pause_game();
+bool diablo_is_focused();
+void diablo_focus_pause();
+void diablo_focus_unpause();
 bool PressEscKey();
-void DisableInputWndProc(UINT uMsg, WPARAM wParam, LPARAM lParam);
-void GM_Game(UINT uMsg, WPARAM wParam, LPARAM lParam);
-void LoadGameLevel(bool firstflag, lvl_entry lvldir);
-void game_loop(bool bStartup);
+void DisableInputEventHandler(const SDL_Event &event, uint16_t modState);
+std::expected<void, std::string> LoadGameLevel(bool firstflag, lvl_entry lvldir);
+bool IsDiabloAlive(bool playSFX);
+void PrintScreen(SDL_Keycode vkey);
+
+/**
+ * @param bStartup Process additional ticks before returning
+ */
+bool game_loop(bool bStartup);
 void diablo_color_cyc_logic();
 
 /* rdata */
 
-extern bool gbForceWindowed;
-extern bool leveldebug;
 #ifdef _DEBUG
-extern bool monstdebug;
-extern _monster_id DebugMonsters[10];
-extern int debugmonsttypes;
-extern bool visiondebug;
-extern int questdebug;
-extern bool debug_mode_key_w;
-extern bool debug_mode_key_inverted_v;
-extern bool debug_mode_dollar_sign;
-extern bool debug_mode_key_d;
-extern bool debug_mode_key_i;
-extern int debug_mode_key_j;
+extern bool DebugDisableNetworkTimeout;
 #endif
-extern bool gbFriendlyMode;
+
+/**
+ * @brief Specifies what game logic step is currently executed
+ */
+extern GameLogicStep gGameLogicStep;
 
 } // namespace devilution

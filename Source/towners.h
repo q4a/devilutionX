@@ -5,15 +5,24 @@
  */
 #pragma once
 
-#include <stdint.h>
+#include <cstddef>
+#include <cstdint>
+#include <memory>
+#include <optional>
+#include <span>
+#include <string>
+#include <string_view>
+#include <unordered_map>
+#include <vector>
 
+#include "engine/clx_sprite.hpp"
 #include "items.h"
+#include "levels/dun_tile.hpp"
 #include "player.h"
 #include "quests.h"
+#include "utils/attributes.h"
 
 namespace devilution {
-
-#define NUM_TOWNERS 16
 
 enum _talker_id : uint8_t {
 	TOWN_SMITH,
@@ -29,48 +38,126 @@ enum _talker_id : uint8_t {
 	TOWN_FARMER,
 	TOWN_GIRL,
 	TOWN_COWFARM,
-	NUM_TOWNER_TYPES,
+	// Note: Enum values are parsed from TSV using magic_enum
+	// The actual count is determined dynamically from TSV data
 };
 
-struct TNQ {
-	uint8_t _qsttype;
-	uint8_t _qstmsg;
-	bool _qstmsgact;
-};
+// Runtime mappings built from TSV data
+extern DVL_API_FOR_TEST std::unordered_map<_talker_id, std::string> TownerLongNames; // Maps towner type enum to display name
+extern const std::unordered_map<_talker_id, const char *> TownerShortNames;          // Maps towner type enum to Lua/mod short name
 
-struct TownerStruct {
-	uint8_t *_tNAnim[8];
-	uint8_t *_tNData;
-	uint8_t *_tAnimData;
-	int16_t _tSeed;
-	int16_t _tx; // Tile X-position of NPC
-	int16_t _ty; // Tile Y-position of NPC
-	int16_t _tAnimWidth;
-	int16_t _tAnimWidth2;
-	int16_t _tAnimDelay; // Tick length of each frame in the current animation
-	int16_t _tAnimCnt;   // Increases by one each game tick, counting how close we are to _pAnimDelay
-	uint8_t _tAnimLen;   // Number of frames in current animation
-	uint8_t _tAnimFrame; // Current frame of animation.
+struct TownConfig;
+struct TownerDataEntry;
+
+/**
+ * @brief Parses a role name ("healer", "smith", "storyteller", ...) used by town NPC definitions.
+ * @return The matching towner type, or nullopt for an unknown role.
+ */
+std::optional<_talker_id> ParseTownerRole(std::string_view role);
+
+/**
+ * @brief Maps a mod/Lua short name (e.g. "farnham") to the role string used in town NPC definitions (e.g. "drunk").
+ */
+std::optional<std::string_view> RoleNameForShortName(std::string_view shortName);
+
+/**
+ * @brief Builds the list of towner entries to spawn for a town.
+ *
+ * Returns the default towners.tsv entries when `config` is null or defines no NPCs. Otherwise returns one
+ * entry per NPC definition, based on the first TSV entry of the NPC's role with the provided fields applied.
+ * Unknown roles and unknown gossip ids are logged and skipped.
+ */
+std::vector<TownerDataEntry> ResolveTownerEntries(const TownConfig *config);
+
+/**
+ * @brief Translated menu name ("Talk to ...") of the towner with this role, or the towners.tsv default if not spawned.
+ */
+std::string_view GetTownerShortName(_talker_id type);
+
+/**
+ * @brief Translated full name of the spawned towner with this role, or the role's default long name if not spawned.
+ */
+std::string_view GetTownerFullName(_talker_id type);
+
+/**
+ * @brief Remembers which towner (index into Towners) the player is talking to, or clears it.
+ */
+void SetTalkingTowner(std::optional<size_t> index);
+
+struct Towner {
+	OptionalOwnedClxSpriteList ownedAnim;
+	OptionalClxSpriteList anim;
+	/** Specifies the animation frame sequence. */
+	std::span<const uint8_t> animOrder;
+	void (*talk)(Player &player, Towner &towner);
+
+	std::string_view name;
+	/** Name used in menus such as "Talk to ..."; same as `name` when the data has no short name. */
+	std::string_view shortName;
+
+	/** Tile position of NPC */
+	Point position;
+	/** Randomly chosen topic for discussion (picked when loading into town) */
+	_speech_id gossip;
+	uint16_t _tAnimWidth;
+	/** Tick length of each frame in the current animation */
+	int16_t _tAnimDelay;
+	/** Increases by one each game tick, counting how close we are to _pAnimDelay */
+	int16_t _tAnimCnt;
+	/** Number of frames in current animation */
+	uint8_t _tAnimLen;
+	/** Current frame of animation. */
+	uint8_t _tAnimFrame;
 	uint8_t _tAnimFrameCnt;
-	uint8_t _tNFrames;
-	char _tName[PLR_NAME_LEN];
-	TNQ qsts[MAXQUESTS];
-	bool _tSelFlag;
-	bool _tMsgSaid;
-	int8_t _tAnimOrder;
-	int8_t _tTalkingToPlayer;
-	bool _tbtcnt;
 	_talker_id _ttype;
+
+	[[nodiscard]] ClxSprite currentSprite() const
+	{
+		return (*anim)[_tAnimFrame];
+	}
+	[[nodiscard]] Displacement getRenderingOffset() const
+	{
+		return { -CalculateSpriteTileCenterX(_tAnimWidth), 0 };
+	}
 };
 
-extern TownerStruct towners[NUM_TOWNERS];
+extern DVL_API_FOR_TEST std::vector<Towner> Towners;
+
+/**
+ * @brief Returns the number of unique towner types found in TSV data.
+ * This is dynamically determined from the loaded towner data.
+ */
+size_t GetNumTownerTypes();
+
+/**
+ * @brief Returns the number of towner instances (actual spawned towners).
+ * This is dynamically determined from the loaded towner data.
+ */
+size_t GetNumTowners();
+
+bool IsTownerPresent(_talker_id npc);
+/**
+ * @brief Maps from a _talker_id value to a pointer to the Towner object, if they have been initialised
+ * @param type enum constant identifying the towner
+ * @return Pointer to the Towner or nullptr if they are not available
+ */
+Towner *GetTowner(_talker_id type);
+
+/**
+ * @brief Like GetTowner, but prefers the towner the player is currently talking to when it has this role.
+ */
+Towner *GetTalkingTowner(_talker_id type);
 
 void InitTowners();
 void FreeTownerGFX();
 void ProcessTowners();
-ItemStruct *PlrHasItem(int pnum, int item, int *i);
-void TalkToTowner(int p, int t);
+void TalkToTowner(Player &player, int t);
 
-extern _speech_id Qtalklist[NUM_TOWNER_TYPES][MAXQUESTS];
+void UpdateGirlAnimAfterQuestComplete();
+void UpdateCowFarmerAnimAfterQuestComplete();
+
+#ifdef _DEBUG
+bool DebugTalkToTowner(_talker_id type);
+#endif
 
 } // namespace devilution

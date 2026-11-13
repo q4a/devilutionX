@@ -1,23 +1,38 @@
-#include "DiabloUI/art_draw.h"
+#include <memory>
+#include <optional>
+#include <vector>
+
+#ifdef USE_SDL3
+#include <SDL3/SDL_events.h>
+#include <SDL3/SDL_rect.h>
+#include <SDL3/SDL_surface.h>
+#else
+#include <SDL.h>
+#endif
+
 #include "DiabloUI/button.h"
 #include "DiabloUI/diabloui.h"
-#include "DiabloUI/fonts.h"
-#include "control.h"
+#include "DiabloUI/ui_item.h"
+#include "controls/input.h"
 #include "controls/menu_controls.h"
-#include "dx.h"
-#include "palette.h"
+#include "engine/clx_sprite.hpp"
+#include "engine/dx.h"
+#include "engine/load_pcx.hpp"
+#include "engine/point.hpp"
+#include "engine/render/clx_render.hpp"
+#include "engine/surface.hpp"
 #include "utils/display.h"
+#include "utils/is_of.hpp"
+#include "utils/language.h"
+#include "utils/sdl_compat.h"
+#include "utils/ui_fwd.h"
 
 namespace devilution {
 namespace {
-Art dialogArt;
-Art progressArt;
-Art ArtPopupSm;
-Art ArtProgBG;
-Art ProgFil;
-SDL_Surface *msgSurface;
-SDL_Surface *msgShadow;
-std::vector<UiItemBase *> vecProgress;
+OptionalOwnedClxSpriteList ArtPopupSm;
+OptionalOwnedClxSpriteList ArtProgBG;
+OptionalOwnedClxSpriteList ProgFil;
+std::vector<std::unique_ptr<UiItemBase>> vecProgress;
 bool endMenu;
 
 void DialogActionCancel()
@@ -25,75 +40,89 @@ void DialogActionCancel()
 	endMenu = true;
 }
 
-void ProgressLoad(const char *msg)
+void ProgressLoadBackground()
 {
-	LoadBackgroundArt("ui_art\\black.pcx");
-	LoadArt("ui_art\\spopup.pcx", &ArtPopupSm);
-	LoadArt("ui_art\\prog_bg.pcx", &ArtProgBG);
-	LoadArt("ui_art\\prog_fil.pcx", &ProgFil);
-	LoadSmlButtonArt();
-	LoadTtfFont();
-
-	if (font != nullptr) {
-		SDL_Color color = { 243, 243, 243, 0 };
-		SDL_Color black = { 0, 0, 0, 0 };
-
-		msgSurface = TTF_RenderUTF8_Solid(font, msg, color);
-		msgShadow = TTF_RenderUTF8_Solid(font, msg, black);
-	}
-	SDL_Rect rect3 = { (Sint16)(PANEL_LEFT + 265), (Sint16)(UI_OFFSET_Y + 267), SML_BUTTON_WIDTH, SML_BUTTON_HEIGHT };
-	vecProgress.push_back(new UiButton(&SmlButton, "Cancel", &DialogActionCancel, rect3, 0));
+	UiLoadBlackBackground();
+	ArtPopupSm = LoadPcx("ui_art\\spopup");
+	ArtProgBG = LoadPcx("ui_art\\prog_bg");
 }
 
-void ProgressFree()
+void ProgressLoadForeground()
 {
-	ArtBackground.Unload();
-	ArtPopupSm.Unload();
-	ArtProgBG.Unload();
-	ProgFil.Unload();
-	UnloadSmlButtonArt();
-	SDL_FreeSurface(msgSurface);
-	msgSurface = nullptr;
-	SDL_FreeSurface(msgShadow);
-	msgShadow = nullptr;
-	UnloadTtfFont();
+	LoadDialogButtonGraphics();
+	ProgFil = LoadPcx("ui_art\\prog_fil");
+
+	const Point uiPosition = GetUIRectangle().position;
+	const SDL_Rect rect3 = { (Sint16)(uiPosition.x + 265), (Sint16)(uiPosition.y + 267), DialogButtonWidth, DialogButtonHeight };
+	vecProgress.push_back(std::make_unique<UiButton>(_("Cancel"), &DialogActionCancel, rect3));
 }
 
-void ProgressRender(BYTE progress)
+void ProgressFreeBackground()
 {
-	SDL_FillRect(DiabloUiSurface(), nullptr, 0x000000);
-	DrawArt(0, 0, &ArtBackground);
+	ArtBackground = std::nullopt;
+	ArtPopupSm = std::nullopt;
+	ArtProgBG = std::nullopt;
+}
 
-	Sint16 x = GetCenterOffset(280);
-	Sint16 y = GetCenterOffset(144, gnScreenHeight);
+void ProgressFreeForeground()
+{
+	vecProgress.clear();
+	ProgFil = std::nullopt;
+	FreeDialogButtonGraphics();
+}
 
-	DrawArt(x, y, &ArtPopupSm, 0, 280, 140);
-	DrawArt(GetCenterOffset(227), y + 52, &ArtProgBG, 0, 227);
+Point GetPosition()
+{
+	return { GetCenterOffset(280), GetCenterOffset(144, gnScreenHeight) };
+}
+
+void ProgressRenderBackground()
+{
+	SDL_FillSurfaceRect(DiabloUiSurface(), nullptr, 0);
+
+	const Surface &out = Surface(DiabloUiSurface());
+	const Point position = GetPosition();
+	RenderClxSprite(out.subregion(position.x, position.y, 280, 140), (*ArtPopupSm)[0], { 0, 0 });
+	RenderClxSprite(out.subregion(GetCenterOffset(227), 0, 227, out.h()), (*ArtProgBG)[0], { 0, position.y + 52 });
+}
+
+void ProgressRenderForeground(int progress)
+{
+	const Surface &out = Surface(DiabloUiSurface());
+	const Point position = GetPosition();
 	if (progress != 0) {
-		DrawArt(GetCenterOffset(227), y + 52, &ProgFil, 0, 227 * progress / 100);
+		const int x = GetCenterOffset(227);
+		const int w = 227 * progress / 100;
+		RenderClxSprite(out.subregion(x, 0, w, out.h()), (*ProgFil)[0], { 0, position.y + 52 });
 	}
-	DrawArt(GetCenterOffset(110), y + 99, &SmlButton, 2, 110);
-
-	if (msgSurface != nullptr) {
-		SDL_Rect dscRect = {
-			static_cast<Sint16>(x + 50 + 1),
-			static_cast<Sint16>(y + 8 + 1),
-			static_cast<Uint16>(msgSurface->w),
-			static_cast<Uint16>(msgSurface->h)
-		};
-		Blit(msgShadow, nullptr, &dscRect);
-		dscRect.x -= 1;
-		dscRect.y -= 1;
-		Blit(msgSurface, nullptr, &dscRect);
-	}
+	// Not rendering an actual button, only the top 2 rows of its graphics.
+	RenderClxSprite(
+	    out.subregion(GetCenterOffset(110), position.y + 99, DialogButtonWidth, 2),
+	    ButtonSprite(/*pressed=*/false), { 0, 0 });
 }
 
 } // namespace
 
-bool UiProgressDialog(const char *msg, int (*fnfunc)())
+bool UiProgressDialog(int (*fnfunc)())
 {
-	ProgressLoad(msg);
-	SetFadeLevel(256);
+	// Blit the background once and then free it.
+	ProgressLoadBackground();
+
+	ProgressRenderBackground();
+
+	if (RenderDirectlyToOutputSurface && PalSurface != nullptr) {
+		// Render into all the backbuffers if there are multiple.
+		const void *initialPixels = PalSurface->pixels;
+		UiFadeIn();
+		while (PalSurface->pixels != initialPixels) {
+			ProgressRenderBackground();
+			UiFadeIn();
+		}
+	}
+
+	ProgressFreeBackground();
+
+	ProgressLoadForeground();
 
 	endMenu = false;
 	int progress = 0;
@@ -101,32 +130,36 @@ bool UiProgressDialog(const char *msg, int (*fnfunc)())
 	SDL_Event event;
 	while (!endMenu && progress < 100) {
 		progress = fnfunc();
-		ProgressRender(progress);
+		ProgressRenderForeground(progress);
 		UiRenderItems(vecProgress);
 		DrawMouse();
-		RenderPresent();
+		UiFadeIn();
 
-		while (SDL_PollEvent(&event) != 0) {
+		while (PollEvent(&event)) {
 			switch (event.type) {
-			case SDL_MOUSEBUTTONDOWN:
-			case SDL_MOUSEBUTTONUP:
+			case SDL_EVENT_MOUSE_BUTTON_DOWN:
+			case SDL_EVENT_MOUSE_BUTTON_UP:
 				UiItemMouseEvents(&event, vecProgress);
 				break;
+			case SDL_EVENT_KEY_DOWN:
+				switch (SDLC_EventKey(event)) {
 #ifndef USE_SDL1
-			case SDLK_KP_ENTER:
+				case SDLK_KP_ENTER:
 #endif
-			case SDLK_ESCAPE:
-			case SDLK_RETURN:
-			case SDLK_SPACE:
-				endMenu = true;
-				break;
-			default:
-				switch (GetMenuAction(event)) {
-				case MenuAction_BACK:
-				case MenuAction_SELECT:
+				case SDLK_ESCAPE:
+				case SDLK_RETURN:
+				case SDLK_SPACE:
 					endMenu = true;
 					break;
 				default:
+					break;
+				}
+				break;
+			default:
+				for (const MenuAction menuAction : GetMenuActions(event)) {
+					if (IsNoneOf(menuAction, MenuAction_BACK, MenuAction_SELECT))
+						continue;
+					endMenu = true;
 					break;
 				}
 				break;
@@ -134,7 +167,7 @@ bool UiProgressDialog(const char *msg, int (*fnfunc)())
 			UiHandleEvents(&event);
 		}
 	}
-	ProgressFree();
+	ProgressFreeForeground();
 
 	return progress == 100;
 }

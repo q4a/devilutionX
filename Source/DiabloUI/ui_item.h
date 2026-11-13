@@ -5,234 +5,297 @@
 #include <string>
 #include <vector>
 
-#include "DiabloUI/art.h"
-#include "DiabloUI/text_draw.h"
+#include "DiabloUI/text_input.hpp"
+#include "DiabloUI/ui_flags.hpp"
+#include "engine/clx_sprite.hpp"
+#include "engine/render/text_render.hpp"
+#include "utils/enum_traits.h"
+#include "utils/string_or_view.hpp"
 #include "utils/stubs.h"
 
 namespace devilution {
 
-enum UiType : uint8_t {
-	UI_TEXT,
-	UI_ART_TEXT,
-	UI_ART_TEXT_BUTTON,
-	UI_IMAGE,
-	UI_BUTTON,
-	UI_LIST,
-	UI_SCROLLBAR,
-	UI_EDIT,
-};
-
-enum UiFlags : uint16_t {
-	// clang-format off
-	UIS_SMALL    = 1 << 0,
-	UIS_MED      = 1 << 1,
-	UIS_BIG      = 1 << 2,
-	UIS_HUGE     = 1 << 3,
-	UIS_CENTER   = 1 << 4,
-	UIS_RIGHT    = 1 << 5,
-	UIS_VCENTER  = 1 << 6,
-	UIS_SILVER   = 1 << 7,
-	UIS_GOLD     = 1 << 8,
-	UIS_DISABLED = 1 << 9,
-	UIS_HIDDEN   = 1 << 10,
-	// clang-format on
+enum class UiType : uint8_t {
+	Text,
+	ArtText,
+	ArtTextButton,
+	ImageClx,
+	ImageAnimatedClx,
+	Button,
+	List,
+	Scrollbar,
+	Edit,
 };
 
 class UiItemBase {
 public:
-	UiItemBase(SDL_Rect rect, int flags)
+	virtual ~UiItemBase() = default;
+
+	[[nodiscard]] UiType GetType() const
 	{
-		m_rect = rect;
-		m_iFlags = flags;
-	};
-
-	UiItemBase(Sint16 x, Sint16 y, Uint16 item_width, Uint16 item_height, int flags)
-	{
-		SDL_Rect tmp;
-		tmp.x = x;
-		tmp.y = y;
-		tmp.w = item_width;
-		tmp.h = item_height;
-
-		m_rect = tmp;
-		m_iFlags = flags;
-	};
-
-	virtual ~UiItemBase() {};
-
-	bool has_flag(UiFlags flag) const
-	{
-		return m_iFlags & flag;
+		return type_;
 	}
 
-	bool has_any_flag(int flags) const
+	[[nodiscard]] bool IsType(UiType testType) const
 	{
-		return (m_iFlags & flags) != 0;
+		return type_ == testType;
 	}
 
-	void add_flag(UiFlags flag)
+	[[nodiscard]] UiFlags GetFlags() const
 	{
-		m_iFlags |= flag;
+		return uiFlags_;
 	}
 
-	void remove_flag(UiFlags flag)
+	[[nodiscard]] bool IsHidden() const
 	{
-		m_iFlags &= ~flag;
+		return HasAnyOf(uiFlags_, UiFlags::ElementHidden);
 	}
 
-	//protected:
-	UiType m_type;
+	[[nodiscard]] bool IsNotInteractive() const
+	{
+		return HasAnyOf(uiFlags_, UiFlags::ElementHidden | UiFlags::ElementDisabled);
+	}
+
+	void Hide()
+	{
+		uiFlags_ |= UiFlags::ElementHidden;
+	}
+
+	void Show()
+	{
+		uiFlags_ &= ~UiFlags::ElementHidden;
+	}
+
+protected:
+	UiItemBase(UiType type, SDL_Rect rect, UiFlags flags)
+	    : type_(type)
+	    , m_rect(rect)
+	    , uiFlags_(flags)
+	{
+	}
+
+	void SetFlags(UiFlags flags)
+	{
+		uiFlags_ = flags;
+	}
+
+private:
+	UiType type_;
+
+public:
 	SDL_Rect m_rect;
-	int m_iFlags;
+
+private:
+	UiFlags uiFlags_;
 };
 
 //=============================================================================
-
-class UiImage : public UiItemBase {
+class UiImageClx : public UiItemBase {
 public:
-	UiImage(Art *art, SDL_Rect rect, int flags = 0)
-	    : UiItemBase(rect, flags)
+	UiImageClx(ClxSprite sprite, SDL_Rect rect, UiFlags flags = UiFlags::None)
+	    : UiItemBase(UiType::ImageClx, rect, flags)
+	    , sprite_(sprite)
 	{
-		m_type = UI_IMAGE;
-		m_art = art;
-		m_animated = false;
-		m_frame = 0;
-	};
-
-	UiImage(Art *art, bool bAnimated, int iFrame, SDL_Rect rect, int flags)
-	    : UiItemBase(rect, flags)
-	{
-		m_type = UI_IMAGE;
-		m_art = art;
-		m_animated = bAnimated;
-		m_frame = iFrame;
-	};
-
-	UiImage(Art *art, int frame, SDL_Rect rect, int flags = 0)
-	    : UiItemBase(rect, flags)
-	{
-		m_type = UI_IMAGE;
-		m_art = art;
-		m_animated = false;
-		m_frame = frame;
 	}
 
-	~UiImage() {};
+	[[nodiscard]] bool isCentered() const
+	{
+		return HasAnyOf(GetFlags(), UiFlags::AlignCenter);
+	}
 
-	//private:
-	Art *m_art;
-	bool m_animated;
-	int m_frame;
+	[[nodiscard]] ClxSprite sprite() const
+	{
+		return sprite_;
+	}
+
+	void setSprite(ClxSprite sprite)
+	{
+		sprite_ = sprite;
+	}
+
+private:
+	ClxSprite sprite_;
+};
+
+//=============================================================================
+class UiImageAnimatedClx : public UiItemBase {
+public:
+	UiImageAnimatedClx(ClxSpriteList list, SDL_Rect rect, UiFlags flags = UiFlags::None)
+	    : UiItemBase(UiType::ImageAnimatedClx, rect, flags)
+	    , list_(list)
+	{
+	}
+
+	[[nodiscard]] bool isCentered() const
+	{
+		return HasAnyOf(GetFlags(), UiFlags::AlignCenter);
+	}
+
+	[[nodiscard]] ClxSprite sprite(uint16_t frame) const
+	{
+		return list_[frame];
+	}
+
+	[[nodiscard]] uint16_t numFrames() const
+	{
+		return list_.numSprites();
+	}
+
+private:
+	ClxSpriteList list_;
 };
 
 //=============================================================================
 
 class UiArtText : public UiItemBase {
 public:
-	UiArtText(const char *text, SDL_Rect rect, int flags = 0)
-	    : UiItemBase(rect, flags)
+	/**
+	 * @brief Constructs a UI element containing a (presumed to be) static line of text
+	 * @param text Pointer to the first character of a c-string
+	 * @param rect screen region defining the area to draw the text
+	 * @param flags UiFlags controlling color/alignment/size
+	 * @param spacing Spacing between characters
+	 * @param lineHeight Vertical distance between text lines
+	 */
+	UiArtText(const char *text, SDL_Rect rect, UiFlags flags = UiFlags::None, int spacing = 1, int lineHeight = -1)
+	    : UiItemBase(UiType::ArtText, rect, flags)
+	    , text_(text)
+	    , spacing_(spacing)
+	    , lineHeight_(lineHeight)
 	{
-		m_type = UI_ART_TEXT;
-		m_text = text;
-	};
+	}
 
-	~UiArtText() {};
+	/**
+	 * @brief Constructs a UI element containing a line of text that may change between frames
+	 * @param ptext Pointer to a c-string (pointer to a pointer to the first character)
+	 * @param rect screen region defining the area to draw the text
+	 * @param flags UiFlags controlling color/alignment/size
+	 * @param spacing Spacing between characters
+	 * @param lineHeight Vertical distance between text lines
+	 */
+	UiArtText(const char **ptext, SDL_Rect rect, UiFlags flags = UiFlags::None, int spacing = 1, int lineHeight = -1)
+	    : UiItemBase(UiType::ArtText, rect, flags)
+	    , textPointer_(ptext)
+	    , spacing_(spacing)
+	    , lineHeight_(lineHeight)
+	{
+	}
 
-	//private:
-	const char *m_text;
+	[[nodiscard]] std::string_view GetText() const
+	{
+		if (text_ != nullptr)
+			return text_;
+		return *textPointer_;
+	}
+
+	[[nodiscard]] int GetSpacing() const
+	{
+		return spacing_;
+	}
+
+	[[nodiscard]] int GetLineHeight() const
+	{
+		return lineHeight_;
+	}
+
+private:
+	const char *text_ = nullptr;
+	const char **textPointer_ = nullptr;
+	int spacing_;
+	int lineHeight_;
 };
 
 //=============================================================================
 
-class UiScrollBar : public UiItemBase {
+class UiScrollbar : public UiItemBase {
 public:
-	UiScrollBar(Art *bg, Art *thumb, Art *arrow, SDL_Rect rect, int flags = 0)
-	    : UiItemBase(rect, flags)
+	UiScrollbar(ClxSprite bg, ClxSprite thumb, ClxSpriteList arrow, SDL_Rect rect, UiFlags flags = UiFlags::None)
+	    : UiItemBase(UiType::Scrollbar, rect, flags)
+	    , m_bg(bg)
+	    , m_thumb(thumb)
+	    , m_arrow(arrow)
 	{
-		m_type = UI_SCROLLBAR;
-		m_bg = bg;
-		m_thumb = thumb;
-		m_arrow = arrow;
-	};
+	}
 
-	//private:
-	Art *m_bg;
-	Art *m_thumb;
-	Art *m_arrow;
+	// private:
+	ClxSprite m_bg;
+	ClxSprite m_thumb;
+	ClxSpriteList m_arrow;
 };
 
 //=============================================================================
 
 class UiArtTextButton : public UiItemBase {
 public:
-	UiArtTextButton(const char *text, void (*action)(), SDL_Rect rect, int flags = 0)
-	    : UiItemBase(rect, flags)
+	using Callback = void (*)();
+
+	UiArtTextButton(std::string_view text, Callback action, SDL_Rect rect, UiFlags flags = UiFlags::None)
+	    : UiItemBase(UiType::ArtTextButton, rect, flags)
+	    , text_(text)
+	    , action_(action)
 	{
-		m_type = UI_ART_TEXT_BUTTON;
-		m_text = text;
-		m_action = action;
-	};
-	//private:
-	const char *m_text;
-	void (*m_action)();
+	}
+
+	void SetFlags(UiFlags flags)
+	{
+		UiItemBase::SetFlags(flags);
+	}
+
+	[[nodiscard]] std::string_view GetText() const
+	{
+		return text_;
+	}
+
+	void Activate() const
+	{
+		action_();
+	}
+
+private:
+	std::string_view text_;
+	Callback action_;
 };
 
 //=============================================================================
 
 class UiEdit : public UiItemBase {
 public:
-	UiEdit(char *value, std::size_t max_length, SDL_Rect rect, int flags = 0)
-	    : UiItemBase(rect, flags)
+	UiEdit(std::string_view hint, char *value, std::size_t maxLength, bool allowEmpty, SDL_Rect rect, UiFlags flags = UiFlags::None)
+	    : UiItemBase(UiType::Edit, rect, flags)
+	    , m_hint(hint)
+	    , m_value(value)
+	    , m_max_length(maxLength)
+	    , m_allowEmpty(allowEmpty)
 	{
-		m_type = UI_EDIT;
-		m_value = value;
-		m_max_length = max_length;
 	}
 
-	//private:
+	// private:
+	std::string_view m_hint;
 	char *m_value;
 	std::size_t m_max_length;
+	TextInputCursorState m_cursor;
+	bool m_allowEmpty;
 };
 
 //=============================================================================
 
-// Plain text (TTF)
+// Plain text
 
 class UiText : public UiItemBase {
 public:
-	UiText(const char *text, SDL_Color color1, SDL_Rect rect, int flags = 0)
-	    : UiItemBase(rect, flags)
+	UiText(std::string_view text, SDL_Rect rect, UiFlags flags = UiFlags::ColorDialogWhite)
+	    : UiItemBase(UiType::Text, rect, flags)
+	    , text_(text)
 	{
-		m_type = UI_TEXT;
-		m_color = color1;
-
-		SDL_Color color2 = { 0, 0, 0, 0 };
-		m_shadow_color = color2;
-
-		m_text = text;
 	}
 
-	UiText(const char *text, SDL_Rect rect, int flags = 0)
-	    : UiItemBase(rect, flags)
+	[[nodiscard]] std::string_view GetText() const
 	{
-		m_type = UI_TEXT;
-
-		SDL_Color color1 = { 243, 243, 243, 0 };
-		m_color = color1;
-
-		SDL_Color color2 = { 0, 0, 0, 0 };
-		m_shadow_color = color2;
-
-		m_text = text;
+		return text_;
 	}
 
-	//private:
-	SDL_Color m_color;
-	SDL_Color m_shadow_color;
-	const char *m_text;
-
-	// State:
-	TtfSurfaceCache m_render_cache;
+private:
+	std::string_view text_;
 };
 
 //=============================================================================
@@ -241,70 +304,85 @@ public:
 
 class UiButton : public UiItemBase {
 public:
-	UiButton(Art *art, const char *text, void (*action)(), SDL_Rect rect, int flags = 0)
-	    : UiItemBase(rect, flags)
+	using Callback = void (*)();
+
+	UiButton(std::string_view text, Callback action, SDL_Rect rect, UiFlags flags = UiFlags::None)
+	    : UiItemBase(UiType::Button, rect, flags)
+	    , text_(text)
+	    , action_(action)
+	    , pressed_(false)
 	{
-		m_type = UI_BUTTON;
-		m_art = art;
-		m_text = text;
-		m_action = action;
-		m_pressed = false;
 	}
 
-	enum FrameKey : uint8_t {
-		DEFAULT,
-		PRESSED,
-		DISABLED
-	};
+	[[nodiscard]] std::string_view GetText() const
+	{
+		return text_;
+	}
 
-	//private:
-	Art *m_art;
+	void Activate() const
+	{
+		action_();
+	}
 
-	const char *m_text;
-	void (*m_action)();
+	[[nodiscard]] bool IsPressed() const
+	{
+		return pressed_;
+	}
+
+	void Press()
+	{
+		pressed_ = true;
+	}
+
+	void Release()
+	{
+		pressed_ = false;
+	}
+
+private:
+	std::string_view text_;
+	Callback action_;
 
 	// State
-	bool m_pressed;
-	TtfSurfaceCache m_render_cache;
+	bool pressed_;
 };
 
 //=============================================================================
 
 class UiListItem {
 public:
-	UiListItem(const char *text = "", int value = 0)
-	{
-		m_text = text;
-		m_value = value;
-	}
-
-	~UiListItem()
+	UiListItem(StringOrView &&text = {}, int value = 0, UiFlags uiFlags = UiFlags::None)
+	    : m_text(std::move(text))
+	    , m_value(value)
+	    , uiFlags(uiFlags)
 	{
 	}
 
-	//private:
-	const char *m_text;
+	UiListItem(StringOrView &&text, std::vector<DrawStringFormatArg> &args, int value = 0, UiFlags uiFlags = UiFlags::None)
+	    : m_text(std::move(text))
+	    , args(args)
+	    , m_value(value)
+	    , uiFlags(uiFlags)
+	{
+	}
+
+	// private:
+	StringOrView m_text;
+	std::vector<DrawStringFormatArg> args;
 	int m_value;
+	UiFlags uiFlags;
 };
-
-typedef std::vector<UiListItem *> vUiListItem;
 
 class UiList : public UiItemBase {
 public:
-	UiList(vUiListItem vItems, Sint16 x, Sint16 y, Uint16 item_width, Uint16 item_height, int flags = 0)
-	    : UiItemBase(x, y, item_width, item_height * vItems.size(), flags)
+	using vUiListItem = std::vector<std::unique_ptr<UiListItem>>;
+
+	UiList(const vUiListItem &vItems, size_t viewportMaxSize, Sint16 x, Sint16 y, Uint16 item_width, Uint16 item_height, UiFlags flags = UiFlags::None, int spacing = 1)
+	    : UiList(PrivateConstructor {}, vItems, std::min<size_t>(viewportMaxSize, vItems.size()), x, y, item_width, item_height, flags, spacing)
 	{
-		m_type = UI_LIST;
-		m_vecItems = vItems;
-		m_x = x;
-		m_y = y;
-		m_width = item_width;
-		m_height = item_height;
-	};
+	}
 
-	~UiList() {};
-
-	SDL_Rect itemRect(int i) const
+	[[nodiscard]] SDL_Rect itemRect(int i) const
 	{
 		SDL_Rect tmp;
 		tmp.x = m_x;
@@ -315,22 +393,67 @@ public:
 		return tmp;
 	}
 
-	int indexAt(Sint16 y) const
+	[[nodiscard]] size_t indexAt(Sint16 y) const
 	{
 		ASSERT(y >= m_rect.y);
-		const std::size_t index = (y - m_rect.y) / m_height;
+		const size_t index = (y - m_rect.y) / m_height;
 		ASSERT(index < m_vecItems.size());
 		return index;
 	}
 
-	UiListItem *GetItem(int i) const
+	[[nodiscard]] UiListItem *GetItem(std::size_t i) const
 	{
 		return m_vecItems[i];
 	}
 
-	//private:
+	[[nodiscard]] int GetSpacing() const
+	{
+		return spacing_;
+	}
+
+	[[nodiscard]] bool IsPressed(size_t index) const
+	{
+		return pressed_item_index_ == index;
+	}
+
+	void Press(size_t index)
+	{
+		pressed_item_index_ = index;
+	}
+
+	void Release()
+	{
+		pressed_item_index_ = -1;
+	}
+
+	// private:
+	size_t viewportSize;
 	Sint16 m_x, m_y;
 	Uint16 m_width, m_height;
 	std::vector<UiListItem *> m_vecItems;
+
+private:
+	struct PrivateConstructor final {
+	};
+
+	UiList(PrivateConstructor tag, const vUiListItem &vItems, size_t viewportSize, Sint16 x, Sint16 y, Uint16 item_width, Uint16 item_height, UiFlags flags, int spacing)
+	    : UiItemBase(UiType::List, { x, y, item_width, static_cast<Uint16>(item_height * viewportSize) }, flags)
+	    , viewportSize(viewportSize)
+	    , m_x(x)
+	    , m_y(y)
+	    , m_width(item_width)
+	    , m_height(item_height)
+	    , spacing_(spacing)
+	{
+		for (const auto &item : vItems)
+			m_vecItems.push_back(item.get());
+
+		pressed_item_index_ = -1;
+	}
+
+	int spacing_;
+
+	// State
+	size_t pressed_item_index_;
 };
 } // namespace devilution

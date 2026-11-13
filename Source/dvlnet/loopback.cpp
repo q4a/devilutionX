@@ -1,19 +1,26 @@
 #include "dvlnet/loopback.h"
+
+#include <cstdint>
+
+#include "multi.h"
+#include "player.h"
+#include "utils/language.h"
 #include "utils/stubs.h"
 
 namespace devilution::net {
 
-int loopback::create(std::string addrstr, std::string passwd)
+int loopback::create(std::string_view /*addrstr*/)
 {
+	IsLoopback = true;
 	return plr_single;
 }
 
-int loopback::join(std::string addrstr, std::string passwd)
+int loopback::join(std::string_view /*addrstr*/)
 {
 	ABORT();
 }
 
-bool loopback::SNetReceiveMessage(int *sender, char **data, int *size)
+bool loopback::SNetReceiveMessage(uint8_t *sender, void **data, size_t *size)
 {
 	if (message_queue.empty())
 		return false;
@@ -21,35 +28,35 @@ bool loopback::SNetReceiveMessage(int *sender, char **data, int *size)
 	message_queue.pop();
 	*sender = plr_single;
 	*size = message_last.size();
-	*data = reinterpret_cast<char *>(message_last.data());
+	*data = message_last.data();
 	return true;
 }
 
-bool loopback::SNetSendMessage(int dest, void *data, unsigned int size)
+bool loopback::SNetSendMessage(uint8_t dest, void *data, size_t size)
 {
-	if (dest == plr_single || dest == SNPLAYER_ALL) {
+	if (dest == plr_single) {
 		auto *rawMessage = reinterpret_cast<unsigned char *>(data);
-		buffer_t message(rawMessage, rawMessage + size);
+		const buffer_t message(rawMessage, rawMessage + size);
 		message_queue.push(message);
 	}
 	return true;
 }
 
-bool loopback::SNetReceiveTurns(char **data, unsigned int *size, DWORD *status)
+bool loopback::SNetReceiveTurns(char **data, size_t *size, uint32_t * /*status*/)
 {
-	for (auto i = 0; i < MAX_PLRS; ++i) {
+	for (size_t i = 0; i < Players.size(); ++i) {
 		size[i] = 0;
 		data[i] = nullptr;
 	}
 	return true;
 }
 
-bool loopback::SNetSendTurn(char *data, unsigned int size)
+bool loopback::SNetSendTurn(char * /*data*/, size_t /*size*/)
 {
 	return true;
 }
 
-int loopback::SNetGetProviderCaps(struct _SNETCAPS *caps)
+void loopback::SNetGetProviderCaps(struct _SNETCAPS *caps)
 {
 	caps->size = 0;                  // engine writes only ?!?
 	caps->flags = 0;                 // unused
@@ -61,31 +68,30 @@ int loopback::SNetGetProviderCaps(struct _SNETCAPS *caps)
 	caps->defaultturnssec = 10;      // ?
 	caps->defaultturnsintransit = 1; // maximum acceptable number
 	                                 // of turns in queue?
-	return 1;
 }
 
-bool loopback::SNetRegisterEventHandler(event_type evtype,
-    SEVTHANDLER func)
+bool loopback::SNetRegisterEventHandler(event_type /*evtype*/,
+    SEVTHANDLER /*func*/)
 {
 	// not called in real singleplayer mode
 	// not needed in pseudo multiplayer mode (?)
 	return true;
 }
 
-bool loopback::SNetUnregisterEventHandler(event_type evtype,
-    SEVTHANDLER func)
+bool loopback::SNetUnregisterEventHandler(event_type /*evtype*/)
 {
 	// not called in real singleplayer mode
 	// not needed in pseudo multiplayer mode (?)
 	return true;
 }
 
-bool loopback::SNetLeaveGame(int type)
+bool loopback::SNetLeaveGame(net::leaveinfo_t /*type*/)
 {
+	IsLoopback = false;
 	return true;
 }
 
-bool loopback::SNetDropPlayer(int playerid, DWORD flags)
+bool loopback::SNetDropPlayer(int /*playerid*/, net::leaveinfo_t /*flags*/)
 {
 	return true;
 }
@@ -94,13 +100,13 @@ void loopback::setup_gameinfo(buffer_t info)
 {
 }
 
-bool loopback::SNetGetOwnerTurnsWaiting(DWORD *turns)
+bool loopback::SNetGetOwnerTurnsWaiting(uint32_t *turns)
 {
 	*turns = 0;
 	return true;
 }
 
-bool loopback::SNetGetTurnsInTransit(DWORD *turns)
+bool loopback::SNetGetTurnsInTransit(uint32_t *turns)
 {
 	*turns = 0;
 	return true;
@@ -108,7 +114,7 @@ bool loopback::SNetGetTurnsInTransit(DWORD *turns)
 
 std::string loopback::make_default_gamename()
 {
-	return std::string("loopback");
+	return std::string(_("loopback"));
 }
 
 } // namespace devilution::net

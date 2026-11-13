@@ -5,27 +5,40 @@
  */
 #pragma once
 
-#include <stdint.h>
+#include <cstddef>
+#include <cstdint>
 
-#include "engine.h"
+#include "engine/clx_sprite.hpp"
+#include "engine/direction.hpp"
+#include "engine/point.hpp"
 
 namespace devilution {
 
-#define MAXDEAD 31
+static constexpr unsigned MaxCorpses = 31;
 
-struct DeadStruct {
-	uint8_t *_deadData[8];
-	int _deadFrame;
-	int _deadWidth;
-	int _deadWidth2;
-	uint8_t _deadtrans;
+struct Corpse {
+	OptionalClxSpriteListOrSheet sprites;
+	int frame;
+	uint16_t width;
+	uint8_t translationPaletteIndex;
+
+	/**
+	 * @brief Returns the sprite list for a given direction.
+	 *
+	 * @param direction One of the 16 directions. Valid range: [0, 15].
+	 * @return ClxSpriteList
+	 */
+	[[nodiscard]] ClxSpriteList spritesForDirection(Direction direction) const
+	{
+		return sprites->isSheet() ? sprites->sheet()[static_cast<size_t>(direction)] : sprites->list();
+	}
 };
 
-extern DeadStruct dead[MAXDEAD];
+extern Corpse Corpses[MaxCorpses];
 extern int8_t stonendx;
 
-void InitDead();
-void AddDead(int dx, int dy, int8_t dv, direction ddir);
-void SetDead();
+void InitCorpses();
+void AddCorpse(Point tilePosition, int8_t dv, Direction ddir);
+void MoveLightsToCorpses();
 
 } // namespace devilution

@@ -5,28 +5,57 @@
  */
 #pragma once
 
-#include <stdint.h>
+#include <cstdint>
+
+#ifdef USE_SDL3
+#include <SDL3/SDL_events.h>
+#include <SDL3/SDL_version.h>
+#else
+#include <SDL.h>
+#endif
 
 #include "utils/ui_fwd.h"
 
 namespace devilution {
 
-#define UI_OFFSET_Y ((Sint16)((gnScreenHeight - 480) / 2))
+/**
+ * @brief Custom events.
+ */
+enum interface_mode : uint8_t {
+	WM_DIABNEXTLVL = 0,
+	WM_DIABPREVLVL,
+	WM_DIABRTNLVL,
+	WM_DIABSETLVL,
+	WM_DIABWARPLVL,
+	WM_DIABTOWNWARP,
+	WM_DIABTWARPUP,
+	WM_DIABRETOWN,
+	WM_DIABTOWNSWITCH,
+	WM_DIABNEWGAME,
+	WM_DIABLOADGAME,
 
-enum interface_mode : uint16_t {
-	// clang-format off
-	WM_DIABNEXTLVL  = 0x402, // WM_USER+2
-	WM_DIABPREVLVL  = 0x403,
-	WM_DIABRTNLVL   = 0x404,
-	WM_DIABSETLVL   = 0x405,
-	WM_DIABWARPLVL  = 0x406,
-	WM_DIABTOWNWARP = 0x407,
-	WM_DIABTWARPUP  = 0x408,
-	WM_DIABRETOWN   = 0x409,
-	WM_DIABNEWGAME  = 0x40A,
-	WM_DIABLOADGAME = 0x40B
-	// clang-format on
+	// Asynchronous loading events.
+	WM_PROGRESS,
+	WM_ERROR,
+	WM_DONE,
+
+	WM_FIRST = WM_DIABNEXTLVL,
+	WM_LAST = WM_DONE,
 };
+
+void RegisterCustomEvents();
+
+#if SDL_VERSION_ATLEAST(2, 0, 0)
+using SdlEventType = uint16_t;
+#else
+using SdlEventType = uint8_t;
+#endif
+
+bool IsCustomEvent(SdlEventType eventType);
+
+interface_mode GetCustomEvent(const SDL_Event &event);
+
+void CustomEventToSdlEvent(SDL_Event &event, interface_mode eventType);
 
 enum Cutscenes : uint8_t {
 	CutStart,
@@ -42,8 +71,14 @@ enum Cutscenes : uint8_t {
 	CutGate,
 };
 
+/** @brief Queues WM_DIABTOWNSWITCH for the local player. The town id is carried in event.user.data1. */
+void QueueTownSwitch(uint8_t townId);
+
 void interface_msg_pump();
-bool IncProgress();
-void ShowProgress(interface_mode uMsg);
+void IncProgress(uint32_t steps = 1);
+void CompleteProgress();
+
+/** @param destinationTownId Town id for WM_DIABTOWNSWITCH. Other modes ignore it. */
+void ShowProgress(interface_mode uMsg, uint8_t destinationTownId = 0);
 
 } // namespace devilution

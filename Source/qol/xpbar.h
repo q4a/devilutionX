@@ -1,18 +1,18 @@
 /**
-* @file xpbar.h
-*
-* Adds XP bar QoL feature
-*/
+ * @file xpbar.h
+ *
+ * Adds XP bar QoL feature
+ */
 #pragma once
 
 namespace devilution {
 
-struct CelOutputBuffer;
+struct Surface;
 
 void InitXPBar();
 void FreeXPBar();
 
-void DrawXPBar(const CelOutputBuffer &out);
+void DrawXPBar(const Surface &out);
 bool CheckXPBarInfo();
 
 } // namespace devilution

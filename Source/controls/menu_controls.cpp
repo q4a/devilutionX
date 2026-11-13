@@ -1,9 +1,19 @@
 #include "controls/menu_controls.h"
 
+#ifdef USE_SDL3
+#include <SDL3/SDL_events.h>
+#include <SDL3/SDL_keyboard.h>
+#include <SDL3/SDL_keycode.h>
+#else
+#include <SDL.h>
+#endif
+
 #include "DiabloUI/diabloui.h"
 #include "controls/axis_direction.h"
+#include "controls/control_mode.hpp"
 #include "controls/controller.h"
 #include "controls/controller_motion.h"
+#include "controls/plrctrls.h"
 #include "controls/remap_keyboard.h"
 #include "utils/sdl_compat.h"
 
@@ -12,7 +22,7 @@ namespace devilution {
 MenuAction GetMenuHeldUpDownAction()
 {
 	static AxisDirectionRepeater repeater;
-	const AxisDirection dir = repeater.Get(GetLeftStickOrDpadDirection());
+	const AxisDirection dir = repeater.Get(GetLeftStickOrDpadDirection(false));
 	switch (dir.y) {
 	case AxisDirectionY_UP:
 		return MenuAction_UP;
@@ -23,96 +33,129 @@ MenuAction GetMenuHeldUpDownAction()
 	}
 }
 
-MenuAction GetMenuAction(const SDL_Event &event)
+std::vector<MenuAction> GetMenuActions(const SDL_Event &event)
 {
-	const ControllerButtonEvent ctrlEvent = ToControllerButtonEvent(event);
+	std::vector<MenuAction> menuActions;
+	for (const ControllerButtonEvent ctrlEvent : ToControllerButtonEvents(event)) {
+		if (ctrlEvent.button == ControllerButton_IGNORE) {
+			continue;
+		}
 
-	if (ProcessControllerMotion(event, ctrlEvent)) {
-		sgbControllerActive = true;
-		return GetMenuHeldUpDownAction();
+		const bool isGamepadMotion = IsControllerMotion(event);
+		DetectInputMethod(event, ctrlEvent);
+		if (isGamepadMotion) {
+			menuActions.push_back(GetMenuHeldUpDownAction());
+			continue;
+		}
+
+		if (!ctrlEvent.up) {
+			switch (TranslateTo(GamepadType, ctrlEvent.button)) {
+			case ControllerButton_BUTTON_A:
+			case ControllerButton_BUTTON_START:
+				menuActions.push_back(MenuAction_SELECT);
+				break;
+			case ControllerButton_BUTTON_BACK:
+			case ControllerButton_BUTTON_B:
+				menuActions.push_back(MenuAction_BACK);
+				break;
+			case ControllerButton_BUTTON_X:
+				menuActions.push_back(MenuAction_DELETE);
+				break;
+			case ControllerButton_BUTTON_DPAD_UP:
+			case ControllerButton_BUTTON_DPAD_DOWN:
+				menuActions.push_back(GetMenuHeldUpDownAction());
+				break;
+			case ControllerButton_BUTTON_DPAD_LEFT:
+				menuActions.push_back(MenuAction_LEFT);
+				break;
+			case ControllerButton_BUTTON_DPAD_RIGHT:
+				menuActions.push_back(MenuAction_RIGHT);
+				break;
+			case ControllerButton_BUTTON_LEFTSHOULDER:
+				menuActions.push_back(MenuAction_PAGE_UP);
+				break;
+			case ControllerButton_BUTTON_RIGHTSHOULDER:
+				menuActions.push_back(MenuAction_PAGE_DOWN);
+				break;
+			default:
+				break;
+			}
+		}
+	}
+	if (!menuActions.empty()) {
+		return menuActions;
 	}
 
-	if (ctrlEvent.button != ControllerButton_NONE)
-		sgbControllerActive = true;
-
-	if (!ctrlEvent.up) {
-		switch (ctrlEvent.button) {
-		case ControllerButton_IGNORE:
-			return MenuAction_NONE;
-		case ControllerButton_BUTTON_B: // Right button
-		case ControllerButton_BUTTON_START:
-			return MenuAction_SELECT;
-		case ControllerButton_BUTTON_BACK:
-		case ControllerButton_BUTTON_A: // Bottom button
-			return MenuAction_BACK;
-		case ControllerButton_BUTTON_X: // Left button
-			return MenuAction_DELETE;
-		case ControllerButton_BUTTON_DPAD_UP:
-		case ControllerButton_BUTTON_DPAD_DOWN:
-			return GetMenuHeldUpDownAction();
-		case ControllerButton_BUTTON_DPAD_LEFT:
-			return MenuAction_LEFT;
-		case ControllerButton_BUTTON_DPAD_RIGHT:
-			return MenuAction_RIGHT;
-		case ControllerButton_BUTTON_LEFTSHOULDER:
-			return MenuAction_PAGE_UP;
-		case ControllerButton_BUTTON_RIGHTSHOULDER:
-			return MenuAction_PAGE_DOWN;
-		default:
-			break;
+	if (event.type ==
+#ifdef USE_SDL3
+	    SDL_EVENT_MOUSE_BUTTON_DOWN
+#else
+	    SDL_MOUSEBUTTONDOWN
+#endif
+	) {
+		switch (event.button.button) {
+		case SDL_BUTTON_X1:
+#if !SDL_VERSION_ATLEAST(2, 0, 0)
+		case 8:
+#endif
+			return { MenuAction_BACK };
 		}
 	}
 
 #if HAS_KBCTRL == 0
-	if (event.type >= SDL_KEYDOWN && event.type < SDL_JOYAXISMOTION)
-		sgbControllerActive = false;
-
-	if (event.type == SDL_KEYDOWN) {
-		auto sym = event.key.keysym.sym;
+	if (event.type == SDL_EVENT_KEY_DOWN) {
+		SDL_Keycode sym = SDLC_EventKey(event);
 		remap_keyboard_key(&sym);
 		switch (sym) {
 		case SDLK_UP:
-			return MenuAction_UP;
+			return { MenuAction_UP };
 		case SDLK_DOWN:
-			return MenuAction_DOWN;
+			return { MenuAction_DOWN };
 		case SDLK_TAB:
-			if ((SDL_GetModState() & KMOD_SHIFT) != 0)
-				return MenuAction_UP;
-			else
-				return MenuAction_DOWN;
+			if ((SDL_GetModState() & SDL_KMOD_SHIFT) != 0) {
+				return { MenuAction_UP };
+			}
+			return { MenuAction_DOWN };
 		case SDLK_PAGEUP:
-			return MenuAction_PAGE_UP;
+			return { MenuAction_PAGE_UP };
 		case SDLK_PAGEDOWN:
-			return MenuAction_PAGE_DOWN;
-		case SDLK_RETURN: {
-			const Uint8 *state = SDLC_GetKeyState();
-			if (state[SDLC_KEYSTATE_LALT] == 0 && state[SDLC_KEYSTATE_RALT] == 0) {
-				return MenuAction_SELECT;
+			return { MenuAction_PAGE_DOWN };
+		case SDLK_RETURN:
+			if ((SDL_GetModState() & SDL_KMOD_ALT) == 0) {
+				return { MenuAction_SELECT };
 			}
 			break;
-		}
 		case SDLK_KP_ENTER:
-			return MenuAction_SELECT;
+			return { MenuAction_SELECT };
 		case SDLK_SPACE:
-			if (!textInputActive) {
-				return MenuAction_SELECT;
+			if (!IsTextInputActive()) {
+				return { MenuAction_SELECT };
 			}
 			break;
 		case SDLK_DELETE:
-			return MenuAction_DELETE;
+			if (!IsTextInputActive()) {
+				return { MenuAction_DELETE };
+			}
+			break;
 		case SDLK_LEFT:
-			return MenuAction_LEFT;
+			if (!IsTextInputActive()) {
+				return { MenuAction_LEFT };
+			}
+			break;
 		case SDLK_RIGHT:
-			return MenuAction_RIGHT;
+			if (!IsTextInputActive()) {
+				return { MenuAction_RIGHT };
+			}
+			break;
 		case SDLK_ESCAPE:
-			return MenuAction_BACK;
+			return { MenuAction_BACK };
 		default:
 			break;
 		}
 	}
 #endif
 
-	return MenuAction_NONE;
+	return {};
 } // namespace devilution
 
 } // namespace devilution

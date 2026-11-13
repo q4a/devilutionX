@@ -1,11 +1,15 @@
 #pragma once
 
-#include <stdint.h>
 #include <cstdint>
-#include <SDL.h>
 
+#ifdef USE_SDL3
+#include <SDL3/SDL_events.h>
+#else
+#include <SDL.h>
+#endif
+
+#include "controls/axis_direction.h"
 #include "controls/controller.h"
-#include "./axis_direction.h"
 
 namespace devilution {
 
@@ -22,20 +26,10 @@ enum GameActionType : uint8_t {
 	GameActionType_TOGGLE_SPELL_BOOK,
 	GameActionType_TOGGLE_QUEST_LOG,
 	GameActionType_SEND_KEY,
-	GameActionType_SEND_MOUSE_CLICK,
 };
 
 struct GameActionSendKey {
-	Uint32 vk_code;
-	bool up;
-};
-
-struct GameActionSendMouseClick {
-	enum Button : uint8_t {
-		LEFT,
-		RIGHT,
-	};
-	Button button;
+	uint32_t vk_code;
 	bool up;
 };
 
@@ -58,23 +52,29 @@ struct GameAction {
 	{
 	}
 
-	GameAction(GameActionSendMouseClick send_mouse_click)
-	    : type(GameActionType_SEND_MOUSE_CLICK)
-	    , send_mouse_click(send_mouse_click)
-	{
-	}
-
 	union {
 		GameActionSendKey send_key;
-		GameActionSendMouseClick send_mouse_click;
 	};
 };
 
-bool GetGameAction(const SDL_Event &event, ControllerButtonEvent ctrlEvent, GameAction *action);
+ControllerButton TranslateTo(GamepadLayout layout, ControllerButton button);
+
+bool SkipsMovie(ControllerButtonEvent ctrlEvent);
+
+bool IsSimulatedMouseClickBinding(ControllerButtonEvent ctrlEvent);
 
 AxisDirection GetMoveDirection();
 
-extern bool start_modifier_active;
-extern bool select_modifier_active;
+bool HandleControllerButtonEvent(const SDL_Event &event, const ControllerButtonEvent ctrlEvent, GameAction &action);
+
+extern bool PadMenuNavigatorActive;
+extern bool PadHotspellMenuActive;
+
+// Tracks the button most recently used as a modifier for another button.
+//
+// If two buttons are pressed simultaneously, SDL sends two events for which both buttons are in the pressed state.
+// The event processor may interpret the second event's button as a modifier for the action taken when processing the first event.
+// The code for the modifier will be stored here, and the event processor can check this value when processing the second event to suppress it.
+extern ControllerButton SuppressedButton;
 
 } // namespace devilution

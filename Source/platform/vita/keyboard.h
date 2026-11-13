@@ -1,3 +1,5 @@
 #pragma once
 
-void vita_start_text_input(const char *guide_text, const char *initial_text, int max_length);
+#include <string_view>
+
+void vita_start_text_input(std::string_view guide_text, std::string_view initial_text, unsigned max_length);

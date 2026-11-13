@@ -4,16 +4,18 @@
 
 namespace devilution {
 
-const std::string &GetBasePath();
-const std::string &GetPrefPath();
-const std::string &GetConfigPath();
-const std::string &GetTtfPath();
-const std::string &GetTtfName();
+namespace paths {
 
-void SetBasePath(const char *path);
-void SetPrefPath(const char *path);
-void SetConfigPath(const char *path);
-void SetTtfPath(const char *path);
-void SetTtfName(const char *path);
+const std::string &BasePath();
+const std::string &PrefPath();
+const std::string &ConfigPath();
+const std::string &AssetsPath();
+
+void SetBasePath(const std::string &path);
+void SetPrefPath(const std::string &path);
+void SetConfigPath(const std::string &path);
+void SetAssetsPath(const std::string &path);
+
+} // namespace paths
 
 } // namespace devilution

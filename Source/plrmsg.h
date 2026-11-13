@@ -5,22 +5,20 @@
  */
 #pragma once
 
-#include "engine.h"
+#include <cstdint>
+#include <string>
+#include <string_view>
+
+#include "DiabloUI/ui_flags.hpp"
+#include "engine/surface.hpp"
+#include "player.h"
 
 namespace devilution {
 
-struct _plrmsg {
-	Uint32 time;
-	Uint8 player;
-	char str[144];
-};
-
-void plrmsg_delay(bool delay);
-void ErrorPlrMsg(const char *pszMsg);
-size_t EventPlrMsg(const char *pszFmt, ...);
-void SendPlrMsg(int pnum, const char *pszStr);
-void ClearPlrMsg();
+void DelayPlrMessages(uint32_t delayTime);
+void EventPlrMsg(std::string_view text, UiFlags style = UiFlags::ColorWhitegold);
+void SendPlrMsg(Player &player, std::string_view text);
 void InitPlrMsg();
-void DrawPlrMsg(const CelOutputBuffer &out);
+void DrawPlrMsg(const Surface &out);
 
 } // namespace devilution

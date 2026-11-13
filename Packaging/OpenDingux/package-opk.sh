@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
+declare OPK_DESKTOP_NAME
+declare OPK_DESKTOP_EXEC
+declare -a OPK_EXTRA_FILES
+
 package_opk() {
 	local ext
 	if [[ $TARGET == rg350 ]] || [[ $TARGET == gkd350h ]]; then
@@ -12,13 +16,20 @@ package_opk() {
 	rm -rf "$tmp"
 	mkdir -p "$tmp"
 	cp "Packaging/OpenDingux/${TARGET}.desktop" "${tmp}/default.${ext}.desktop"
-	cp "Packaging/OpenDingux/${TARGET}-hellfire.desktop" "${tmp}/hellfire.${ext}.desktop"
 	cp "Packaging/OpenDingux/${TARGET}-manual.txt" "${tmp}/readme.${ext}.txt"
+
+	if [[ -v OPK_DESKTOP_NAME ]]; then
+		sed -i "s/Name=.*/Name=${OPK_DESKTOP_NAME}/" "${tmp}/default.${ext}.desktop"
+	fi
+	if [[ -v OPK_DESKTOP_EXEC ]]; then
+		sed -i "s/Exec=.*/Exec=${OPK_DESKTOP_EXEC}/" "${tmp}/default.${ext}.desktop"
+	fi
+
 	mksquashfs "${BUILD_DIR}/devilutionx" \
-		"${tmp}/default.${ext}.desktop" "${tmp}/hellfire.${ext}.desktop" \
+		"${tmp}/default.${ext}.desktop" \
 		"${tmp}/readme.${ext}.txt" Packaging/resources/icon_32.png \
-		Packaging/resources/hellfire_32.png Packaging/resources/CharisSILB.ttf \
-		Packaging/resources/devilutionx.mpq \
+		"${BUILD_DIR}/assets/" \
+		"${OPK_EXTRA_FILES[@]}" \
 		"${BUILD_DIR}/devilutionx-${TARGET}.opk" \
 		-all-root -no-xattrs -noappend -no-exports -no-progress
 }

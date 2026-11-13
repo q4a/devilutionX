@@ -1,8 +1,4 @@
-# Contribution Guide
+# DevilutionX Contribution Guide
+Welcome! Please review our [Contribution Guide](https://github.com/diasurgical/DevilutionX/wiki/Contributing) for more information!
 
-This guide outlines useful resources, tools and processes for contribution to
-DevilutionX.
-
-## Code style guide
-
-[The code style guide](https://github.com/diasurgical/devilutionX/wiki/Code-Style) is evolving with the project.
+_“A project is only as strong as its contributors. Thank you for helping us keep Diablo 1 alive and better than ever!”_

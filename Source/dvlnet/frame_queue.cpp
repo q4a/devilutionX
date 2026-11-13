@@ -2,23 +2,38 @@
 
 #include <cstring>
 
+#include "appfat.h"
 #include "dvlnet/packet.h"
+#include "utils/attributes.h"
+#include "utils/endian_read.hpp"
+#include "utils/endian_write.hpp"
 
-namespace devilution::net {
+namespace devilution {
+namespace net {
 
-framesize_t frame_queue::size()
+namespace {
+
+PacketError FrameQueueError()
+{
+	return PacketError("Incorrect frame size");
+}
+
+} // namespace
+
+framesize_t frame_queue::Size() const
 {
 	return current_size;
 }
 
-buffer_t frame_queue::read(framesize_t s)
+std::expected<buffer_t, PacketError> frame_queue::Read(framesize_t s)
 {
 	if (current_size < s)
-		throw frame_queue_exception();
+		return std::unexpected(FrameQueueError());
 	buffer_t ret;
 	while (s > 0 && s >= buffer_deque.front().size()) {
-		s -= buffer_deque.front().size();
-		current_size -= buffer_deque.front().size();
+		const auto bufferSize = static_cast<framesize_t>(buffer_deque.front().size());
+		s -= bufferSize;
+		current_size -= bufferSize;
 		ret.insert(ret.end(),
 		    buffer_deque.front().begin(),
 		    buffer_deque.front().end());
@@ -35,46 +50,56 @@ buffer_t frame_queue::read(framesize_t s)
 	return ret;
 }
 
-void frame_queue::write(buffer_t buf)
+void frame_queue::Write(buffer_t buf)
 {
-	current_size += buf.size();
+	current_size += static_cast<framesize_t>(buf.size());
 	buffer_deque.push_back(std::move(buf));
 }
 
-bool frame_queue::packet_ready()
+std::expected<bool, PacketError> frame_queue::PacketReady()
 {
-	if (!nextsize) {
-		if (size() < sizeof(framesize_t))
+	if (nextsize == 0) {
+		if (Size() < sizeof(framesize_t))
 			return false;
-		auto szbuf = read(sizeof(framesize_t));
-		std::memcpy(&nextsize, &szbuf[0], sizeof(framesize_t));
-		if (!nextsize)
-			throw frame_queue_exception();
+		std::expected<buffer_t, PacketError> szbuf = Read(sizeof(framesize_t));
+		if (!szbuf.has_value())
+			return std::unexpected(szbuf.error());
+		nextsize = LoadLE32(szbuf->data());
+		if (nextsize == 0)
+			return std::unexpected(FrameQueueError());
 	}
-	if (size() >= nextsize)
-		return true;
-
-	return false;
+	return Size() >= (nextsize & frame_size_mask);
 }
 
-buffer_t frame_queue::read_packet()
+uint16_t frame_queue::ReadPacketFlags()
 {
-	if (!nextsize || (size() < nextsize))
-		throw frame_queue_exception();
-	auto ret = read(nextsize);
+	static_assert(sizeof(nextsize) == 4, "framesize_t is not 4 bytes");
+	return static_cast<uint16_t>(nextsize >> 16);
+}
+
+std::expected<buffer_t, PacketError> frame_queue::ReadPacket()
+{
+	const framesize_t packetSize = nextsize & frame_size_mask;
+	if (nextsize == 0 || Size() < packetSize)
+		return std::unexpected(FrameQueueError());
+	std::expected<buffer_t, PacketError> ret = Read(packetSize);
 	nextsize = 0;
 	return ret;
 }
 
-buffer_t frame_queue::make_frame(buffer_t packetbuf)
+std::expected<buffer_t, PacketError> frame_queue::MakeFrame(buffer_t packetbuf, uint16_t flags)
 {
 	buffer_t ret;
-	if (packetbuf.size() > max_frame_size)
-		ABORT();
-	framesize_t size = packetbuf.size();
-	ret.insert(ret.end(), packet_out::begin(size), packet_out::end(size));
+	const auto size = static_cast<framesize_t>(packetbuf.size());
+	if (size > max_frame_size)
+		return std::unexpected("Buffer exceeds maximum frame size");
+	static_assert(sizeof(size) == 4, "framesize_t is not 4 bytes");
+	unsigned char sizeBuf[4];
+	WriteLE32(sizeBuf, size | (static_cast<framesize_t>(flags) << 16));
+	ret.insert(ret.end(), sizeBuf, sizeBuf + 4);
 	ret.insert(ret.end(), packetbuf.begin(), packetbuf.end());
 	return ret;
 }
 
-} // namespace devilution::net
+} // namespace net
+} // namespace devilution

@@ -1,33 +1,38 @@
 #pragma once
 
-#include <string>
 #include <memory>
+#include <string>
+
 #include <asio/ts/buffer.hpp>
 #include <asio/ts/internet.hpp>
 #include <asio/ts/io_context.hpp>
 #include <asio/ts/net.hpp>
+#include <asio_handle_exception.hpp>
 
-#include "dvlnet/packet.h"
-#include "dvlnet/frame_queue.h"
 #include "dvlnet/base.h"
+#include "dvlnet/frame_queue.h"
+#include "dvlnet/packet.h"
 #include "dvlnet/tcp_server.h"
 
-namespace devilution {
-namespace net {
+namespace devilution::net {
 
 class tcp_client : public base {
 public:
-	int create(std::string addrstr, std::string passwd);
-	int join(std::string addrstr, std::string passwd);
+	int create(std::string_view addrstr) override;
+	int join(std::string_view addrstr) override;
 
-	virtual void poll();
-	virtual void send(packet &pkt);
+	std::expected<void, PacketError> poll() override;
+	std::expected<void, PacketError> send(packet &pkt) override;
+	void DisconnectNet(plr_t plr) override;
 
-	virtual bool SNetLeaveGame(int type);
+	bool SNetLeaveGame(net::leaveinfo_t type) override;
 
-	virtual ~tcp_client();
+	~tcp_client() override;
 
-	virtual std::string make_default_gamename();
+	std::string make_default_gamename() override;
+
+protected:
+	bool IsGameHost() override;
 
 private:
 	frame_queue recv_queue;
@@ -38,10 +43,14 @@ private:
 	asio::ip::tcp::socket sock = asio::ip::tcp::socket(ioc);
 	std::unique_ptr<tcp_server> local_server; // must be declared *after* ioc
 
-	void handle_recv(const asio::error_code &error, size_t bytes_read);
-	void start_recv();
-	void handle_send(const asio::error_code &error, size_t bytes_sent);
+	std::optional<PacketError> ioHandlerResult;
+
+	void HandleReceive(const asio::error_code &error, size_t bytesRead);
+	void StartReceive();
+	void HandleSend(const asio::error_code &error, size_t bytesSent);
+	void HandleTcpErrorCode();
+
+	void RaiseIoHandlerError(const PacketError &error);
 };
 
-} // namespace net
-} // namespace devilution
+} // namespace devilution::net

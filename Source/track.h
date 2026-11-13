@@ -7,8 +7,8 @@
 
 namespace devilution {
 
-void track_process();
-void track_repeat_walk(bool rep);
+void InvalidateTargets();
+void RepeatPlayerAction();
 bool track_isscrolling();
 
 } // namespace devilution

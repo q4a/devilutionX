@@ -5,10 +5,16 @@
  */
 #pragma once
 
+#include <cstddef>
+#include <cstdint>
+
+#include "msg.h"
+#include "player.h"
+
 namespace devilution {
 
-Uint32 sync_all_monsters(const Uint8 *pbBuf, Uint32 dwMaxLen);
-Uint32 sync_update(int pnum, const Uint8 *pbBuf);
+size_t sync_all_monsters(std::byte *pbBuf, size_t dwMaxLen);
+size_t OnSyncData(const TSyncHeader &header, size_t maxCmdSize, const Player &player);
 void sync_init();
 
 } // namespace devilution

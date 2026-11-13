@@ -5,94 +5,103 @@
  */
 #include "dead.h"
 
-#include "gendung.h"
+#include <cstdint>
+
+#include "diablo.h"
+#include "headless_mode.hpp"
+#include "levels/gendung.h"
 #include "lighting.h"
-#include "misdat.h"
 #include "monster.h"
+#include "tables/misdat.h"
 
 namespace devilution {
 
-DeadStruct dead[MAXDEAD];
+Corpse Corpses[MaxCorpses];
 int8_t stonendx;
 
-void InitDead()
+namespace {
+void InitDeadAnimationFromMonster(Corpse &corpse, const CMonster &mon)
 {
-	int8_t mtypes[MAXMONSTERS];
+	const AnimStruct &animData = mon.getAnimData(MonsterGraphic::Death);
+	if (animData.sprites) {
+		corpse.sprites.emplace(*animData.sprites);
+	} else {
+		corpse.sprites = std::nullopt;
+	}
+	corpse.frame = animData.frames - 1;
+	corpse.width = animData.width;
+}
 
-	for (int8_t &mtype : mtypes)
-		mtype = 0;
+void MoveLightToCorpse(Monster &monster)
+{
+	for (int dx = 0; dx < MAXDUNX; dx++) {
+		for (int dy = 0; dy < MAXDUNY; dy++) {
+			if ((dCorpse[dx][dy] & 0x1F) == monster.corpseId) {
+				ChangeLightXY(monster.lightId, { dx, dy });
+				return;
+			}
+		}
+	}
+	AddUnLight(monster.lightId);
+}
+} // namespace
+
+void InitCorpses()
+{
+	int8_t mtypes[MaxMonsters] = {};
 
 	int8_t nd = 0;
 
-	for (int i = 0; i < nummtypes; i++) {
-		if (mtypes[Monsters[i].mtype] == 0) {
-			for (int d = 0; d < 8; d++)
-				dead[nd]._deadData[d] = Monsters[i].Anims[MA_DEATH].Data[d];
-			dead[nd]._deadFrame = Monsters[i].Anims[MA_DEATH].Frames;
-			dead[nd]._deadWidth = Monsters[i].width;
-			dead[nd]._deadWidth2 = Monsters[i].width2;
-			dead[nd]._deadtrans = 0;
-			nd++;
+	for (size_t i = 0; i < LevelMonsterTypeCount; i++) {
+		CMonster &monsterType = LevelMonsterTypes[i];
+		if (mtypes[monsterType.type] != 0)
+			continue;
 
-			Monsters[i].mdeadval = nd;
-			mtypes[Monsters[i].mtype] = nd;
-		}
+		InitDeadAnimationFromMonster(Corpses[nd], monsterType);
+		Corpses[nd].translationPaletteIndex = 0;
+		nd++;
+
+		monsterType.corpseId = nd;
+		mtypes[monsterType.type] = nd;
 	}
 
-	for (auto &d : dead[nd]._deadData)
-		d = misfiledata[MFILE_BLODBUR].mAnimData[0];
-	dead[nd]._deadFrame = 8;
-	dead[nd]._deadWidth = 128;
-	dead[nd]._deadWidth2 = 32;
-	dead[nd]._deadtrans = 0;
-	nd++;
+	nd++; // Unused blood spatter
 
-	for (auto &d : dead[nd]._deadData)
-		d = misfiledata[MFILE_SHATTER1].mAnimData[0];
-
-	dead[nd]._deadFrame = 12;
-	dead[nd]._deadWidth = 128;
-	dead[nd]._deadWidth2 = 32;
-	dead[nd]._deadtrans = 0;
+	if (!HeadlessMode)
+		Corpses[nd].sprites.emplace(*GetMissileSpriteData(MissileGraphicID::StoneCurseShatter).sprites);
+	Corpses[nd].frame = 11;
+	Corpses[nd].width = 128;
+	Corpses[nd].translationPaletteIndex = 0;
 	nd++;
 
 	stonendx = nd;
 
-	for (int i = 0; i < nummonsters; i++) {
-		int mi = monstactive[i];
-		if (monster[mi]._uniqtype != 0) {
-			for (int d = 0; d < 8; d++)
-				dead[nd]._deadData[d] = monster[mi].MType->Anims[MA_DEATH].Data[d];
-			dead[nd]._deadFrame = monster[mi].MType->Anims[MA_DEATH].Frames;
-			dead[nd]._deadWidth = monster[mi].MType->width;
-			dead[nd]._deadWidth2 = monster[mi].MType->width2;
-			dead[nd]._deadtrans = monster[mi]._uniqtrans + 4;
+	for (size_t i = 0; i < ActiveMonsterCount; i++) {
+		auto &monster = Monsters[ActiveMonsters[i]];
+		if (monster.isUnique()) {
+			InitDeadAnimationFromMonster(Corpses[nd], monster.type());
+			Corpses[nd].translationPaletteIndex = ActiveMonsters[i] + 1;
 			nd++;
 
-			monster[mi]._udeadval = nd;
+			monster.corpseId = nd;
 		}
 	}
 
-	assert(nd <= MAXDEAD);
+	assert(static_cast<unsigned>(nd) <= MaxCorpses);
 }
 
-void AddDead(int dx, int dy, int8_t dv, direction ddir)
+void AddCorpse(Point tilePosition, int8_t dv, Direction ddir)
 {
-	dDead[dx][dy] = (dv & 0x1F) + (ddir << 5);
+	dCorpse[tilePosition.x][tilePosition.y] = (dv & 0x1F) + (static_cast<int>(ddir) << 5);
 }
 
-void SetDead()
+void MoveLightsToCorpses()
 {
-	for (int i = 0; i < nummonsters; i++) {
-		int mi = monstactive[i];
-		if (monster[mi]._uniqtype != 0) {
-			for (int dx = 0; dx < MAXDUNX; dx++) {
-				for (int dy = 0; dy < MAXDUNY; dy++) {
-					if ((dDead[dx][dy] & 0x1F) == monster[mi]._udeadval)
-						ChangeLightXY(monster[mi].mlid, dx, dy);
-				}
-			}
-		}
+	for (size_t i = 0; i < ActiveMonsterCount; i++) {
+		auto &monster = Monsters[ActiveMonsters[i]];
+		if (!monster.isUnique())
+			continue;
+		MoveLightToCorpse(monster);
 	}
 }
 

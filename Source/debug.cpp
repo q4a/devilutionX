@@ -4,230 +4,327 @@
  * Implementation of debug functions.
  */
 
-#include <SDL.h>
+#ifdef _DEBUG
 
+#include <cmath>
+#include <cstdint>
+#include <cstdio>
+
+#include <ankerl/unordered_dense.h>
+
+#include "debug.h"
+
+#include "automap.h"
 #include "cursor.h"
-#include "inv.h"
-#include "spells.h"
+#include "engine/load_cel.hpp"
+#include "engine/point.hpp"
+#include "lighting.h"
+#include "missiles.h"
+#include "monster.h"
+#include "plrmsg.h"
+#include "utils/str_case.hpp"
+#include "utils/str_cat.hpp"
 
 namespace devilution {
 
-#ifdef _DEBUG
-bool update_seed_check = false;
+std::string TestMapPath;
+OptionalOwnedClxSpriteList pSquareCel;
+bool DebugToggle = false;
+bool DebugGodMode = false;
+bool DebugInvisible = false;
+bool DebugVision = false;
+bool DebugPath = false;
+bool DebugGrid = false;
+ankerl::unordered_dense::map<int, Point> DebugCoordsMap;
+bool DebugScrollViewEnabled = false;
+std::string debugTRN;
 
-#define DEBUGSEEDS 4096
-int seed_index;
-int level_seeds[NUMLEVELS + 1];
-int seed_table[DEBUGSEEDS];
+// Used for debugging level generation
+uint32_t glMid1Seed[NUMLEVELS];
+uint32_t glMid2Seed[NUMLEVELS];
+uint32_t glMid3Seed[NUMLEVELS];
+uint32_t glEndSeed[NUMLEVELS];
 
-BYTE *pSquareCel;
-char dMonsDbg[NUMLEVELS][MAXDUNX][MAXDUNY];
-char dFlagDbg[NUMLEVELS][MAXDUNX][MAXDUNY];
+namespace {
+
+DebugGridTextItem SelectedDebugGridTextItem;
+
+int DebugMonsterId;
+
+std::vector<std::string> SearchMonsters;
+std::vector<std::string> SearchItems;
+std::vector<std::string> SearchObjects;
+
+void PrintDebugMonster(const Monster &monster)
+{
+	EventPlrMsg(StrCat(
+	                "Monster ", static_cast<int>(monster.getId()), " = ", monster.name(),
+	                "\nX = ", monster.position.tile.x, ", Y = ", monster.position.tile.y,
+	                "\nEnemy = ", monster.enemy, ", HP = ", monster.hitPoints.raw(),
+	                "\nMode = ", static_cast<int>(monster.mode), ", Var1 = ", monster.var1),
+	    UiFlags::ColorWhite);
+
+	bool bActive = false;
+
+	for (size_t i = 0; i < ActiveMonsterCount; i++) {
+		if (&Monsters[ActiveMonsters[i]] == &monster) {
+			bActive = true;
+			break;
+		}
+	}
+
+	EventPlrMsg(StrCat("Active List = ", bActive ? 1 : 0, ", Squelch = ", monster.activeForTicks), UiFlags::ColorWhite);
+}
+
+} // namespace
 
 void LoadDebugGFX()
 {
-	if (visiondebug)
-		pSquareCel = LoadFileInMem("Data\\Square.CEL", nullptr);
+	pSquareCel = LoadCel("data\\square", 64);
 }
 
 void FreeDebugGFX()
 {
-	MemFreeDbg(pSquareCel);
+	pSquareCel = std::nullopt;
 }
-
-void CheckDungeonClear()
-{
-	int i, j;
-
-	for (j = 0; j < MAXDUNY; j++) {
-		for (i = 0; i < MAXDUNX; i++) {
-			if (dMonster[i][j] != 0)
-				app_fatal("Monsters not cleared");
-			if (dPlayer[i][j] != 0)
-				app_fatal("Players not cleared");
-
-			dMonsDbg[currlevel][i][j] = dFlags[i][j] & BFLAG_VISIBLE;
-			dFlagDbg[currlevel][i][j] = dFlags[i][j] & BFLAG_POPULATED;
-		}
-	}
-}
-
-void GiveGoldCheat()
-{
-	int i, ni;
-
-	for (i = 0; i < NUM_INV_GRID_ELEM; i++) {
-		if (plr[myplr].InvGrid[i] == 0) {
-			ni = plr[myplr]._pNumInv++;
-			SetPlrHandItem(&plr[myplr].InvList[ni], IDI_GOLD);
-			GetPlrHandSeed(&plr[myplr].InvList[ni]);
-			plr[myplr].InvList[ni]._ivalue = GOLD_MAX_LIMIT;
-			plr[myplr].InvList[ni]._iCurs = ICURS_GOLD_LARGE;
-			plr[myplr]._pGold += GOLD_MAX_LIMIT;
-			plr[myplr].InvGrid[i] = plr[myplr]._pNumInv;
-		}
-	}
-}
-
-void TakeGoldCheat()
-{
-	int i;
-	char ig;
-
-	for (i = 0; i < NUM_INV_GRID_ELEM; i++) {
-		ig = plr[myplr].InvGrid[i];
-		if (ig > 0 && plr[myplr].InvList[ig - 1]._itype == ITYPE_GOLD)
-			RemoveInvItem(myplr, ig - 1);
-	}
-
-	for (i = 0; i < MAXBELTITEMS; i++) {
-		if (plr[myplr].SpdList[i]._itype == ITYPE_GOLD)
-			plr[myplr].SpdList[i]._itype = ITYPE_NONE;
-	}
-
-	plr[myplr]._pGold = 0;
-}
-
-void MaxSpellsCheat()
-{
-	for (int i = SPL_FIREBOLT; i < MAX_SPELLS; i++) {
-		if (GetSpellBookLevel((spell_id)i) != -1) {
-			plr[myplr]._pMemSpells |= GetSpellBitmask(i);
-			plr[myplr]._pSplLvl[i] = 10;
-		}
-	}
-}
-
-void SetSpellLevelCheat(spell_id spl, int spllvl)
-{
-	plr[myplr]._pMemSpells |= GetSpellBitmask(spl);
-	plr[myplr]._pSplLvl[spl] = spllvl;
-}
-
-void SetAllSpellsCheat()
-{
-	SetSpellLevelCheat(SPL_FIREBOLT, 8);
-	SetSpellLevelCheat(SPL_CBOLT, 11);
-	SetSpellLevelCheat(SPL_HBOLT, 10);
-	SetSpellLevelCheat(SPL_HEAL, 7);
-	SetSpellLevelCheat(SPL_HEALOTHER, 5);
-	SetSpellLevelCheat(SPL_LIGHTNING, 9);
-	SetSpellLevelCheat(SPL_FIREWALL, 5);
-	SetSpellLevelCheat(SPL_TELEKINESIS, 3);
-	SetSpellLevelCheat(SPL_TOWN, 3);
-	SetSpellLevelCheat(SPL_FLASH, 3);
-	SetSpellLevelCheat(SPL_RNDTELEPORT, 2);
-	SetSpellLevelCheat(SPL_MANASHIELD, 2);
-	SetSpellLevelCheat(SPL_WAVE, 4);
-	SetSpellLevelCheat(SPL_FIREBALL, 3);
-	SetSpellLevelCheat(SPL_STONE, 1);
-	SetSpellLevelCheat(SPL_CHAIN, 1);
-	SetSpellLevelCheat(SPL_GUARDIAN, 4);
-	SetSpellLevelCheat(SPL_ELEMENT, 3);
-	SetSpellLevelCheat(SPL_NOVA, 1);
-	SetSpellLevelCheat(SPL_GOLEM, 2);
-	SetSpellLevelCheat(SPL_FLARE, 1);
-	SetSpellLevelCheat(SPL_BONESPIRIT, 1);
-}
-
-int dbgplr;
-
-void PrintDebugPlayer(bool bNextPlayer)
-{
-	char dstr[128];
-
-	if (bNextPlayer)
-		dbgplr = ((BYTE)dbgplr + 1) & 3;
-
-	sprintf(dstr, "Plr %i : Active = %i", dbgplr, plr[dbgplr].plractive);
-	NetSendCmdString(1 << myplr, dstr);
-
-	if (plr[dbgplr].plractive) {
-		sprintf(dstr, "  Plr %i is %s", dbgplr, plr[dbgplr]._pName);
-		NetSendCmdString(1 << myplr, dstr);
-		sprintf(dstr, "  Lvl = %i : Change = %i", plr[dbgplr].plrlevel, plr[dbgplr]._pLvlChanging);
-		NetSendCmdString(1 << myplr, dstr);
-		const SDL_Point target = plr[dbgplr].GetTargetPosition();
-		sprintf(dstr, "  x = %i, y = %i : tx = %i, ty = %i", plr[dbgplr]._px, plr[dbgplr]._py, target.x, target.y);
-		NetSendCmdString(1 << myplr, dstr);
-		sprintf(dstr, "  mode = %i : daction = %i : walk[0] = %i", plr[dbgplr]._pmode, plr[dbgplr].destAction, plr[dbgplr].walkpath[0]);
-		NetSendCmdString(1 << myplr, dstr);
-		sprintf(dstr, "  inv = %i : hp = %i", plr[dbgplr]._pInvincible, plr[dbgplr]._pHitPoints);
-		NetSendCmdString(1 << myplr, dstr);
-	}
-}
-
-int dbgqst;
-
-void PrintDebugQuest()
-{
-	char dstr[128];
-
-	sprintf(dstr, "Quest %i :  Active = %i, Var1 = %i", dbgqst, quests[dbgqst]._qactive, quests[dbgqst]._qvar1);
-	NetSendCmdString(1 << myplr, dstr);
-
-	dbgqst++;
-	if (dbgqst == MAXQUESTS)
-		dbgqst = 0;
-}
-
-void PrintDebugMonster(int m)
-{
-	bool bActive;
-	int i;
-	char dstr[128];
-
-	sprintf(dstr, "Monster %i = %s", m, monster[m].mName);
-	NetSendCmdString(1 << myplr, dstr);
-	sprintf(dstr, "X = %i, Y = %i", monster[m]._mx, monster[m]._my);
-	NetSendCmdString(1 << myplr, dstr);
-	sprintf(dstr, "Enemy = %i, HP = %i", monster[m]._menemy, monster[m]._mhitpoints);
-	NetSendCmdString(1 << myplr, dstr);
-	sprintf(dstr, "Mode = %i, Var1 = %i", monster[m]._mmode, monster[m]._mVar1);
-	NetSendCmdString(1 << myplr, dstr);
-
-	bActive = false;
-
-	for (i = 0; i < nummonsters; i++) {
-		if (monstactive[i] == m)
-			bActive = true;
-	}
-
-	sprintf(dstr, "Active List = %i, Squelch = %i", bActive, monster[m]._msquelch);
-	NetSendCmdString(1 << myplr, dstr);
-}
-
-int dbgmon;
 
 void GetDebugMonster()
 {
-	int mi1, mi2;
+	int monsterIndex = pcursmonst;
+	if (monsterIndex == -1)
+		monsterIndex = std::abs(dMonster[cursPosition.x][cursPosition.y]) - 1;
 
-	mi1 = pcursmonst;
-	if (mi1 == -1) {
-		mi2 = dMonster[cursmx][cursmy];
-		if (mi2 != 0) {
-			mi1 = mi2 - 1;
-			if (mi2 <= 0)
-				mi1 = -(mi2 + 1);
-		} else {
-			mi1 = dbgmon;
-		}
-	}
-	PrintDebugMonster(mi1);
+	if (monsterIndex == -1)
+		monsterIndex = DebugMonsterId;
+
+	PrintDebugMonster(Monsters[monsterIndex]);
 }
 
 void NextDebugMonster()
 {
-	char dstr[128];
+	DebugMonsterId++;
+	if (DebugMonsterId == MaxMonsters)
+		DebugMonsterId = 0;
 
-	dbgmon++;
-	if (dbgmon == MAXMONSTERS)
-		dbgmon = 0;
-
-	sprintf(dstr, "Current debug monster = %i", dbgmon);
-	NetSendCmdString(1 << myplr, dstr);
+	EventPlrMsg(StrCat("Current debug monster = ", DebugMonsterId), UiFlags::ColorWhite);
 }
-#endif
+
+void SetDebugLevelSeedInfos(uint32_t mid1Seed, uint32_t mid2Seed, uint32_t mid3Seed, uint32_t endSeed)
+{
+	glMid1Seed[currlevel] = mid1Seed;
+	glMid2Seed[currlevel] = mid2Seed;
+	glMid3Seed[currlevel] = mid3Seed;
+	glEndSeed[currlevel] = endSeed;
+}
+
+bool IsDebugGridTextNeeded()
+{
+	return SelectedDebugGridTextItem != DebugGridTextItem::None;
+}
+
+bool IsDebugGridInMegatiles()
+{
+	switch (SelectedDebugGridTextItem) {
+	case DebugGridTextItem::AutomapView:
+	case DebugGridTextItem::dungeon:
+	case DebugGridTextItem::pdungeon:
+	case DebugGridTextItem::Protected:
+		return true;
+	default:
+		return false;
+	}
+}
+
+DebugGridTextItem GetDebugGridTextType()
+{
+	return SelectedDebugGridTextItem;
+}
+
+void SetDebugGridTextType(DebugGridTextItem value)
+{
+	SelectedDebugGridTextItem = value;
+}
+
+bool GetDebugGridText(Point dungeonCoords, std::string &debugGridText)
+{
+	int info = 0;
+	int blankValue = 0;
+	debugGridText.clear();
+	Point megaCoords = dungeonCoords.worldToMega();
+	switch (SelectedDebugGridTextItem) {
+	case DebugGridTextItem::coords:
+		StrAppend(debugGridText, dungeonCoords.x, ":", dungeonCoords.y);
+		return true;
+	case DebugGridTextItem::cursorcoords:
+		if (dungeonCoords != cursPosition)
+			return false;
+		StrAppend(debugGridText, dungeonCoords.x, ":", dungeonCoords.y);
+		return true;
+	case DebugGridTextItem::objectindex: {
+		info = 0;
+		Object *object = FindObjectAtPosition(dungeonCoords);
+		if (object != nullptr) {
+			info = static_cast<int>(object->_otype);
+		}
+		break;
+	}
+	case DebugGridTextItem::microTiles: {
+		const MICROS &micros = DPieceMicros[dPiece[dungeonCoords.x][dungeonCoords.y]];
+		for (const LevelCelBlock tile : micros.mt) {
+			if (!tile.hasValue()) break;
+			if (!debugGridText.empty()) debugGridText += '\n';
+			StrAppend(debugGridText, tile.frame(), " ");
+			switch (tile.type()) {
+			case TileType::Square: StrAppend(debugGridText, "S"); break;
+			case TileType::TransparentSquare: StrAppend(debugGridText, "T"); break;
+			case TileType::LeftTriangle: StrAppend(debugGridText, "<"); break;
+			case TileType::RightTriangle: StrAppend(debugGridText, ">"); break;
+			case TileType::LeftTrapezoid: StrAppend(debugGridText, "\\"); break;
+			case TileType::RightTrapezoid: StrAppend(debugGridText, "/"); break;
+			}
+		}
+		return !debugGridText.empty();
+	} break;
+	case DebugGridTextItem::dPiece:
+		info = dPiece[dungeonCoords.x][dungeonCoords.y];
+		break;
+	case DebugGridTextItem::dTransVal:
+		info = dTransVal[dungeonCoords.x][dungeonCoords.y];
+		break;
+	case DebugGridTextItem::dLight:
+		info = dLight[dungeonCoords.x][dungeonCoords.y];
+		blankValue = LightsMax;
+		break;
+	case DebugGridTextItem::dPreLight:
+		info = dPreLight[dungeonCoords.x][dungeonCoords.y];
+		blankValue = LightsMax;
+		break;
+	case DebugGridTextItem::dFlags:
+		info = static_cast<int>(dFlags[dungeonCoords.x][dungeonCoords.y]);
+		break;
+	case DebugGridTextItem::dPlayer:
+		info = dPlayer[dungeonCoords.x][dungeonCoords.y];
+		break;
+	case DebugGridTextItem::dMonster:
+		info = dMonster[dungeonCoords.x][dungeonCoords.y];
+		break;
+	case DebugGridTextItem::missiles: {
+		for (auto &missile : Missiles) {
+			if (missile.position.tile == dungeonCoords) {
+				if (!debugGridText.empty()) debugGridText += '\n';
+				debugGridText.append(std::to_string((int)missile._mitype));
+			}
+		}
+		return !debugGridText.empty();
+	} break;
+	case DebugGridTextItem::dCorpse:
+		info = dCorpse[dungeonCoords.x][dungeonCoords.y];
+		break;
+	case DebugGridTextItem::dItem:
+		info = dItem[dungeonCoords.x][dungeonCoords.y];
+		break;
+	case DebugGridTextItem::dSpecial:
+		info = dSpecial[dungeonCoords.x][dungeonCoords.y];
+		break;
+	case DebugGridTextItem::dObject:
+		info = dObject[dungeonCoords.x][dungeonCoords.y];
+		break;
+	case DebugGridTextItem::Solid:
+		info = TileHasAny(dungeonCoords, TileProperties::Solid) << 0 | TileHasAny(dungeonCoords, TileProperties::BlockLight) << 1 | TileHasAny(dungeonCoords, TileProperties::BlockMissile) << 2;
+		break;
+	case DebugGridTextItem::Transparent:
+		info = TileHasAny(dungeonCoords, TileProperties::Transparent) << 0 | TileHasAny(dungeonCoords, TileProperties::TransparentLeft) << 1 | TileHasAny(dungeonCoords, TileProperties::TransparentRight) << 2;
+		break;
+	case DebugGridTextItem::Trap:
+		info = TileHasAny(dungeonCoords, TileProperties::Trap);
+		break;
+	case DebugGridTextItem::AutomapView:
+		if (megaCoords.x >= 0 && megaCoords.x < DMAXX && megaCoords.y >= 0 && megaCoords.y < DMAXY)
+			info = AutomapView[megaCoords.x][megaCoords.y];
+		break;
+	case DebugGridTextItem::dungeon:
+		if (megaCoords.x >= 0 && megaCoords.x < DMAXX && megaCoords.y >= 0 && megaCoords.y < DMAXY)
+			info = dungeon[megaCoords.x][megaCoords.y];
+		break;
+	case DebugGridTextItem::pdungeon:
+		if (megaCoords.x >= 0 && megaCoords.x < DMAXX && megaCoords.y >= 0 && megaCoords.y < DMAXY)
+			info = pdungeon[megaCoords.x][megaCoords.y];
+		break;
+	case DebugGridTextItem::Protected:
+		if (megaCoords.x >= 0 && megaCoords.x < DMAXX && megaCoords.y >= 0 && megaCoords.y < DMAXY)
+			info = Protected.test(megaCoords.x, megaCoords.y);
+		break;
+	case DebugGridTextItem::None:
+		return false;
+	}
+	if (info == blankValue)
+		return false;
+	StrAppend(debugGridText, info);
+	return true;
+}
+
+bool IsDebugAutomapHighlightNeeded()
+{
+	return SearchMonsters.size() > 0 || SearchItems.size() > 0 || SearchObjects.size() > 0;
+}
+
+bool ShouldHighlightDebugAutomapTile(Point position)
+{
+	auto matchesSearched = [](const std::string_view name, const std::vector<std::string> &searchedNames) {
+		const std::string lowercaseName = AsciiStrToLower(name);
+		for (const auto &searchedName : searchedNames) {
+			if (lowercaseName.find(searchedName) != std::string::npos) {
+				return true;
+			}
+		}
+		return false;
+	};
+
+	if (SearchMonsters.size() > 0 && dMonster[position.x][position.y] != 0) {
+		const int mi = std::abs(dMonster[position.x][position.y]) - 1;
+		const Monster &monster = Monsters[mi];
+		if (matchesSearched(monster.name(), SearchMonsters))
+			return true;
+	}
+
+	if (SearchItems.size() > 0 && dItem[position.x][position.y] != 0) {
+		const int itemId = std::abs(dItem[position.x][position.y]) - 1;
+		const Item &item = Items[itemId];
+		if (matchesSearched(item.getName(), SearchItems))
+			return true;
+	}
+
+	if (SearchObjects.size() > 0 && IsObjectAtPosition(position)) {
+		const Object &object = ObjectAtPosition(position);
+		if (matchesSearched(object.name(), SearchObjects))
+			return true;
+	}
+
+	return false;
+}
+
+void AddDebugAutomapMonsterHighlight(std::string_view name)
+{
+	SearchMonsters.emplace_back(name);
+}
+
+void AddDebugAutomapItemHighlight(std::string_view name)
+{
+	SearchItems.emplace_back(name);
+}
+
+void AddDebugAutomapObjectHighlight(std::string_view name)
+{
+	SearchObjects.emplace_back(name);
+}
+
+void ClearDebugAutomapHighlights()
+{
+	SearchMonsters.clear();
+	SearchItems.clear();
+	SearchObjects.clear();
+}
 
 } // namespace devilution
+
+#endif

@@ -1,26 +1,29 @@
 #include "dvlnet/tcp_server.h"
 
 #include <chrono>
+#include <expected>
 #include <functional>
 #include <memory>
 #include <utility>
 
 #include "dvlnet/base.h"
+#include "player.h"
+#include "utils/log.hpp"
 
 namespace devilution::net {
 
 tcp_server::tcp_server(asio::io_context &ioc, const std::string &bindaddr,
-    unsigned short port, std::string pw)
+    unsigned short port, packet_factory &pktfty)
     : ioc(ioc)
-    , pktfty(std::move(pw))
+    , pktfty(pktfty)
 {
-	auto addr = asio::ip::address::from_string(bindaddr);
+	auto addr = asio::ip::make_address(bindaddr);
 	auto ep = asio::ip::tcp::endpoint(addr, port);
 	acceptor = std::make_unique<asio::ip::tcp::acceptor>(ioc, ep, true);
-	start_accept();
+	StartAccept();
 }
 
-std::string tcp_server::localhost_self()
+std::string tcp_server::LocalhostSelf()
 {
 	auto addr = acceptor->local_endpoint().address();
 	if (addr.is_unspecified()) {
@@ -35,193 +38,286 @@ std::string tcp_server::localhost_self()
 	return addr.to_string();
 }
 
-tcp_server::scc tcp_server::make_connection()
+tcp_server::scc tcp_server::MakeConnection()
 {
 	return std::make_shared<client_connection>(ioc);
 }
 
-plr_t tcp_server::next_free()
+plr_t tcp_server::NextFree()
 {
-	for (plr_t i = 0; i < MAX_PLRS; ++i)
+	for (plr_t i = 0; i < Players.size(); ++i)
 		if (!connections[i])
 			return i;
 	return PLR_BROADCAST;
 }
 
-bool tcp_server::empty()
+bool tcp_server::Empty()
 {
-	for (plr_t i = 0; i < MAX_PLRS; ++i)
+	for (plr_t i = 0; i < Players.size(); ++i)
 		if (connections[i])
 			return false;
 	return true;
 }
 
-void tcp_server::start_recv(const scc &con)
+void tcp_server::StartReceive(const scc &con)
 {
-	con->socket.async_receive(asio::buffer(con->recv_buffer),
-	    std::bind(&tcp_server::handle_recv, this, con,
-	        std::placeholders::_1,
-	        std::placeholders::_2));
+	con->socket.async_receive(
+	    asio::buffer(con->recv_buffer),
+	    std::bind(&tcp_server::HandleReceive, this, con, std::placeholders::_1, std::placeholders::_2));
 }
 
-void tcp_server::handle_recv(const scc &con, const asio::error_code &ec,
+void tcp_server::HandleReceive(const scc &con, const asio::error_code &ec,
     size_t bytesRead)
 {
 	if (ec || bytesRead == 0) {
-		drop_connection(con);
+		DropConnection(con);
 		return;
 	}
 	con->recv_buffer.resize(bytesRead);
-	con->recv_queue.write(std::move(con->recv_buffer));
+	con->recv_queue.Write(std::move(con->recv_buffer));
 	con->recv_buffer.resize(frame_queue::max_frame_size);
-	while (con->recv_queue.packet_ready()) {
-		try {
-			auto pkt = pktfty.make_packet(con->recv_queue.read_packet());
-			if (con->plr == PLR_BROADCAST) {
-				handle_recv_newplr(con, *pkt);
-			} else {
-				con->timeout = timeout_active;
-				handle_recv_packet(*pkt);
-			}
-		} catch (dvlnet_exception &e) {
-			SDL_Log("Network error: %s", e.what());
-			drop_connection(con);
+	while (true) {
+		std::expected<bool, PacketError> ready = con->recv_queue.PacketReady();
+		if (!ready.has_value()) {
+			Log("PacketReady: {}", ready.error().what());
+			DropConnection(con);
 			return;
 		}
+		if (!*ready)
+			break;
+		std::expected<buffer_t, PacketError> pktData = con->recv_queue.ReadPacket();
+		if (!pktData.has_value()) {
+			Log("ReadPacket: {}", pktData.error().what());
+			DropConnection(con);
+			return;
+		}
+		std::expected<std::unique_ptr<packet>, PacketError> pkt = pktfty.make_packet(*pktData);
+		if (!pkt.has_value()) {
+			Log("make_packet: {}", pkt.error().what());
+			if (pkt.error().code() == PacketError::ErrorCode::DecryptionFailed)
+				StartSend(con, pkt.error().code());
+			DropConnection(con);
+			return;
+		}
+		if (con->plr == PLR_BROADCAST) {
+			std::expected<void, PacketError> result = HandleReceiveNewPlayer(con, **pkt);
+			if (!result.has_value()) {
+				Log("HandleReceiveNewPlayer: {}", result.error().what());
+				DropConnection(con);
+				return;
+			}
+		} else {
+			con->timeout = timeout_active;
+			std::expected<void, PacketError> result = HandleReceivePacket(**pkt);
+			if (!result.has_value()) {
+				Log("Network error: {}", result.error().what());
+				DropConnection(con);
+				return;
+			}
+		}
 	}
-	start_recv(con);
+	StartReceive(con);
 }
 
-void tcp_server::send_connect(const scc &con)
+std::expected<void, PacketError> tcp_server::HandleReceiveNewPlayer(const scc &con, packet &inPkt)
 {
-	auto pkt = pktfty.make_packet<PT_CONNECT>(PLR_MASTER, PLR_BROADCAST,
-	    con->plr);
-	send_packet(*pkt);
-}
-
-void tcp_server::handle_recv_newplr(const scc &con, packet &pkt)
-{
-	auto newplr = next_free();
+	auto newplr = NextFree();
 	if (newplr == PLR_BROADCAST)
-		throw server_exception();
-	if (empty())
-		game_init_info = pkt.info();
-	auto reply = pktfty.make_packet<PT_JOIN_ACCEPT>(PLR_MASTER, PLR_BROADCAST,
-	    pkt.cookie(), newplr,
-	    game_init_info);
-	start_send(con, *reply);
+		return std::unexpected(ServerError());
+
+	if (Empty()) {
+		std::expected<const buffer_t *, PacketError> pktInfo = inPkt.Info();
+		if (!pktInfo.has_value())
+			return std::unexpected(pktInfo.error());
+		game_init_info = **pktInfo;
+	}
+
+	for (plr_t player = 0; player < Players.size(); player++) {
+		if (connections[player]) {
+			std::expected<void, PacketError> result
+			    = pktfty.make_packet<PT_CONNECT>(PLR_MASTER, PLR_BROADCAST, newplr)
+			          .and_then([&](std::unique_ptr<packet> &&pkt) { return StartSend(connections[player], *pkt); })
+			          .and_then([&]() { return pktfty.make_packet<PT_CONNECT>(PLR_MASTER, PLR_BROADCAST, player); })
+			          .and_then([&](std::unique_ptr<packet> &&pkt) { return StartSend(con, *pkt); });
+			if (!result.has_value())
+				return result;
+		}
+	}
+
+	std::expected<void, PacketError> result
+	    = inPkt.Cookie()
+	          .and_then([&](cookie_t &&cookie) { return pktfty.make_packet<PT_JOIN_ACCEPT>(PLR_MASTER, PLR_BROADCAST, cookie, newplr, game_init_info); })
+	          .and_then([&](std::unique_ptr<packet> &&pkt) { return StartSend(con, *pkt); });
+	if (!result.has_value())
+		return result;
 	con->plr = newplr;
 	connections[newplr] = con;
 	con->timeout = timeout_active;
-	send_connect(con);
+	return {};
 }
 
-void tcp_server::handle_recv_packet(packet &pkt)
+std::expected<void, PacketError> tcp_server::HandleReceivePacket(packet &pkt)
 {
-	send_packet(pkt);
+	return SendPacket(pkt);
 }
 
-void tcp_server::send_packet(packet &pkt)
+std::expected<void, PacketError> tcp_server::SendPacket(packet &pkt)
 {
-	if (pkt.dest() == PLR_BROADCAST) {
-		for (auto i = 0; i < MAX_PLRS; ++i)
-			if (i != pkt.src() && connections[i])
-				start_send(connections[i], pkt);
-	} else {
-		if (pkt.dest() >= MAX_PLRS)
-			throw server_exception();
-		if ((pkt.dest() != pkt.src()) && connections[pkt.dest()])
-			start_send(connections[pkt.dest()], pkt);
+	if (pkt.Destination() == PLR_BROADCAST) {
+		for (size_t i = 0; i < Players.size(); ++i) {
+			if (i == pkt.Source() || !connections[i])
+				continue;
+			std::expected<void, PacketError> result = StartSend(connections[i], pkt);
+			if (!result.has_value())
+				LogError("Failed to send packet {} to player {}: {}", static_cast<uint8_t>(pkt.Type()), i, result.error().what());
+		}
+		return {};
 	}
+	if (pkt.Destination() >= MAX_PLRS)
+		return std::unexpected(ServerError());
+	if (pkt.Destination() == pkt.Source() || !connections[pkt.Destination()])
+		return {};
+	return StartSend(connections[pkt.Destination()], pkt);
 }
 
-void tcp_server::start_send(const scc &con, packet &pkt)
+std::expected<void, PacketError> tcp_server::StartSend(const scc &con, packet &pkt)
 {
-	const auto *frame = new buffer_t(frame_queue::make_frame(pkt.data()));
-	auto buf = asio::buffer(*frame);
+	return StartSend(con, pkt.Data(), 0);
+}
+
+std::expected<void, PacketError> tcp_server::StartSend(const scc &con, PacketError::ErrorCode errorCode)
+{
+	buffer_t pktData;
+	pktData.push_back(static_cast<unsigned char>(errorCode));
+	return StartSend(con, pktData, TcpErrorCodeFlags);
+}
+
+std::expected<void, PacketError> tcp_server::StartSend(const scc &con, buffer_t pktData, uint16_t flags)
+{
+	std::expected<buffer_t, PacketError> frame = frame_queue::MakeFrame(pktData, flags);
+	if (!frame.has_value())
+		return std::unexpected(frame.error());
+	std::unique_ptr<buffer_t> framePtr = std::make_unique<buffer_t>(*frame);
+	const asio::mutable_buffer buf = asio::buffer(*framePtr);
 	asio::async_write(con->socket, buf,
-	    [this, con, frame](const asio::error_code &ec, size_t bytesSent) {
-		    handle_send(con, ec, bytesSent);
-		    delete frame;
+	    [this, con, frame = std::move(framePtr)](const asio::error_code &ec, size_t bytesSent) {
+		    HandleSend(con, ec, bytesSent);
 	    });
+	return {};
 }
 
-void tcp_server::handle_send(const scc &con, const asio::error_code &ec,
-    size_t bytesSent)
-{
-	// empty for now
-}
-
-void tcp_server::start_accept()
-{
-	auto nextcon = make_connection();
-	acceptor->async_accept(nextcon->socket,
-	    std::bind(&tcp_server::handle_accept,
-	        this, nextcon,
-	        std::placeholders::_1));
-}
-
-void tcp_server::handle_accept(const scc &con, const asio::error_code &ec)
-{
-	if (ec)
-		return;
-	if (next_free() == PLR_BROADCAST) {
-		drop_connection(con);
-	} else {
-		asio::ip::tcp::no_delay option(true);
-		con->socket.set_option(option);
-		con->timeout = timeout_connect;
-		start_recv(con);
-		start_timeout(con);
-	}
-	start_accept();
-}
-
-void tcp_server::start_timeout(const scc &con)
-{
-	con->timer.expires_after(std::chrono::seconds(1));
-	con->timer.async_wait(std::bind(&tcp_server::handle_timeout, this, con,
-	    std::placeholders::_1));
-}
-
-void tcp_server::handle_timeout(const scc &con, const asio::error_code &ec)
+void tcp_server::HandleSend(const scc &con, const asio::error_code &ec,
+    size_t /*bytesSent*/)
 {
 	if (ec) {
-		drop_connection(con);
+		Log("Network error: {}", ec.message());
+		DropConnection(con);
+	}
+}
+
+void tcp_server::StartAccept()
+{
+	auto nextcon = MakeConnection();
+	acceptor->async_accept(
+	    nextcon->socket,
+	    std::bind(&tcp_server::HandleAccept, this, nextcon, std::placeholders::_1));
+}
+
+void tcp_server::HandleAccept(const scc &con, const asio::error_code &ec)
+{
+	if (ec) {
+		const PacketError packetError = IoHandlerError(ec.message());
+		RaiseIoHandlerError(packetError);
+		return;
+	}
+	if (NextFree() == PLR_BROADCAST) {
+		DropConnection(con);
+	} else {
+		asio::error_code errorCode;
+		const asio::ip::tcp::no_delay option(true);
+		con->socket.set_option(option, errorCode);
+		if (errorCode)
+			LogError("Server error setting socket option: {}", errorCode.message());
+		con->timeout = timeout_connect;
+		StartReceive(con);
+		StartTimeout(con);
+	}
+	StartAccept();
+}
+
+void tcp_server::StartTimeout(const scc &con)
+{
+	con->timer.expires_after(std::chrono::seconds(1));
+	con->timer.async_wait(
+	    std::bind(&tcp_server::HandleTimeout, this, con, std::placeholders::_1));
+}
+
+void tcp_server::HandleTimeout(const scc &con, const asio::error_code &ec)
+{
+	if (ec) {
+		DropConnection(con);
 		return;
 	}
 	if (con->timeout > 0)
 		con->timeout -= 1;
-	if (con->timeout < 0)
+	if (con->timeout <= 0) {
 		con->timeout = 0;
-	if (!con->timeout) {
-		drop_connection(con);
+		DropConnection(con);
 		return;
 	}
-	start_timeout(con);
+	StartTimeout(con);
 }
 
-void tcp_server::drop_connection(const scc &con)
+void tcp_server::DropConnection(const scc &con)
 {
-	if (con->plr != PLR_BROADCAST) {
-		auto pkt = pktfty.make_packet<PT_DISCONNECT>(PLR_MASTER, PLR_BROADCAST,
-		    con->plr, LEAVE_DROP);
-		connections[con->plr] = nullptr;
-		send_packet(*pkt);
-		// TODO: investigate if it is really ok for the server to
-		//       drop a client directly.
-	}
+	const plr_t plr = con->plr;
 	con->timer.cancel();
 	con->socket.close();
+	if (plr == PLR_BROADCAST) {
+		return;
+	}
+	connections[plr] = nullptr;
+
+	std::expected<std::unique_ptr<packet>, PacketError> pkt
+	    = pktfty.make_packet<PT_DISCONNECT>(PLR_MASTER, PLR_BROADCAST,
+	        plr, leaveinfo_t::LEAVE_DROP);
+	if (pkt.has_value()) {
+		SendPacket(**pkt);
+	} else {
+		LogError("make_packet<PT_DISCONNECT>: {}", pkt.error().what());
+	}
 }
 
-void tcp_server::close()
+void tcp_server::RaiseIoHandlerError(const PacketError &error)
+{
+	ioHandlerResult.emplace(error);
+}
+
+std::expected<void, PacketError> tcp_server::CheckIoHandlerError()
+{
+	if (ioHandlerResult == std::nullopt)
+		return {};
+	std::expected<void, PacketError> packetError = std::unexpected(*ioHandlerResult);
+	ioHandlerResult = std::nullopt;
+	return packetError;
+}
+
+void tcp_server::DisconnectNet(plr_t plr)
+{
+	scc &con = connections[plr];
+	if (con == nullptr)
+		return;
+	con->timer.cancel();
+	con->socket.close();
+	con = nullptr;
+}
+
+void tcp_server::Close()
 {
 	acceptor->close();
 }
 
 tcp_server::~tcp_server()
-{
-}
+    = default;
 
 } // namespace devilution::net

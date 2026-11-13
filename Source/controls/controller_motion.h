@@ -2,12 +2,19 @@
 
 // Processes and stores mouse and joystick motion.
 
+#ifdef USE_SDL3
+#include <SDL3/SDL_events.h>
+#else
 #include <SDL.h>
+#endif
 
-#include "./axis_direction.h"
-#include "./controller.h"
+#include "controls/axis_direction.h"
+#include "controls/controller.h"
 
 namespace devilution {
+
+// Whether we're currently simulating the mouse with SELECT + D-Pad.
+extern bool SimulatingMouseWithPadmapper;
 
 // Raw axis values.
 extern float leftStickXUnscaled, leftStickYUnscaled, rightStickXUnscaled, rightStickYUnscaled;
@@ -18,10 +25,19 @@ extern float leftStickX, leftStickY, rightStickX, rightStickY;
 // Whether stick positions have been updated and need rescaling.
 extern bool leftStickNeedsScaling, rightStickNeedsScaling;
 
+// Minimum scaled stick magnitude to register a direction.
+constexpr float StickDirectionThreshold = 0.4F;
+
 // Updates motion state for mouse and joystick sticks.
-bool ProcessControllerMotion(const SDL_Event &event, ControllerButtonEvent ctrlEvent);
+void ProcessControllerMotion(const SDL_Event &event);
+
+// Indicates whether the event represents movement of an analog thumbstick.
+bool IsControllerMotion(const SDL_Event &event);
 
 // Returns direction of the left thumb stick or DPad (if allow_dpad = true).
-AxisDirection GetLeftStickOrDpadDirection(bool allow_dpad = true);
+AxisDirection GetLeftStickOrDpadDirection(bool usePadmapper);
+
+// Simulates right-stick movement based on input from padmapper mouse movement actions.
+void SimulateRightStickWithPadmapper(ControllerButtonEvent ctrlEvent);
 
 } // namespace devilution
